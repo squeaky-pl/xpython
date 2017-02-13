@@ -68,7 +68,7 @@ class Compiler:
             argval = instruction.argval
             arg = instruction.arg
             if opname == 'LOAD_CONST':
-                load_const(context, stack, argval)
+                self.load_const(instruction)
             elif opname == 'STORE_FAST':
                 block.add_assignment(variables[arg], stack.pop())
             elif opname == 'LOAD_FAST':
@@ -113,17 +113,17 @@ class Compiler:
 
             print('stack {}'.format(stack))
 
+    def load_const(self, instruction):
+        argval = instruction.argval
+        if isinstance(argval, int):
+            value = self.context.integer(argval)
+        else:
+            assert 0, "Dont know what to do with {}".format(argval)
+        self.stack.append(value)
+
 
 def compile_to_context(context, name, code):
     compiler = Compiler(context, name, code)
     compiler.setup_function()
     compiler.setup_blocks()
     compiler.compile()
-
-
-def load_const(context, stack, argval):
-    if isinstance(argval, int):
-        value = context.integer(argval)
-    else:
-        assert 0, "Dont know what to do with {}".format(argval)
-    stack.append(value)
