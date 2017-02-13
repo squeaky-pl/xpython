@@ -24,6 +24,10 @@ def compile_to_context(context, name, code):
 
     func = context.exported_function("int", name, variables)
 
+    # setup locals
+    for i in range(code.co_argcount, code.co_nlocals):
+        variables.append(context.local(func, "int", code.co_varnames[i]))
+
     # allocate blocks
     blocks = []
     block_map = {}
@@ -39,10 +43,6 @@ def compile_to_context(context, name, code):
 
     print(block_map)
 
-    # setup locals
-    for i in range(code.co_argcount, code.co_nlocals):
-        variables.append(context.local(func, "int", code.co_varnames[i]))
-
     block_iter = iter(blocks)
     block = next(block_iter)
 
@@ -53,8 +53,7 @@ def compile_to_context(context, name, code):
         argval = instruction.argval
         arg = instruction.arg
         if opname == 'LOAD_CONST':
-            # stack.append(argval)
-            stack.append(context.integer(argval))
+            load_const(context, stack, argval)
         elif opname == 'STORE_FAST':
             block.add_assignment(variables[arg], stack.pop())
         elif opname == 'LOAD_FAST':
@@ -98,3 +97,11 @@ def compile_to_context(context, name, code):
             assert 0, "Unknown opname " + opname
 
         print('stack {}, variables {}, ret {}'.format(stack, variables, ret))
+
+
+def load_const(context, stack, argval):
+    if isinstance(argval, int):
+        value = context.integer(argval)
+    else:
+        assert 0, "Dont know what to do with {}".format(argval)
+    stack.append(value)
