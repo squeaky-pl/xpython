@@ -8,7 +8,8 @@ def get_fun_code(source):
 
 
 block_boundaries = [
-    'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'SETUP_LOOP', 'JUMP_ABSOLUTE'
+    'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'SETUP_LOOP', 'JUMP_ABSOLUTE',
+    'BREAK_LOOP'
 ]
 
 
@@ -44,6 +45,8 @@ def compile_to_context(context, name, code):
 
     block_iter = iter(blocks)
     block = next(block_iter)
+
+    block_stack = []
 
     for instruction in dis.get_instructions(code):
         opname = instruction.opname
@@ -81,12 +84,16 @@ def compile_to_context(context, name, code):
         elif opname == 'JUMP_ABSOLUTE':
             block.end_with_jump(block_map[arg])
             block = next(block_iter)
+        elif opname == 'BREAK_LOOP':
+            block.end_with_jump(block_stack[-1])
+            block = next(block_iter)
         elif opname == 'SETUP_LOOP':
+            block_stack.append(block_map[instruction.offset + arg])
             next_block = next(block_iter)
             block.end_with_jump(next_block)
             block = next_block
         elif opname == 'POP_BLOCK':
-            pass
+            block_stack.pop()
         else:
             assert 0, "Unknown opname " + opname
 
