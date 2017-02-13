@@ -125,22 +125,14 @@ class Compiler:
                 self.load_fast(instruction)
             elif opname == 'BINARY_ADD':
                 self.binary_add(instruction)
-            # elif opname == 'INPLACE_ADD':
-            #     b = stack.pop()
-            #     a = stack.pop()
-            #     addition = context.binary('+', "int", a, b)
-            #     stack.append(addition)
-            # elif opname == 'COMPARE_OP':
-            #     b = stack.pop()
-            #     a = stack.pop()
-            #     comparison = context.comparison(dis.cmp_op[arg], a, b)
-            #     stack.append(comparison)
+            elif opname == 'INPLACE_ADD':
+                self.inplace_add(instruction)
+            elif opname == 'COMPARE_OP':
+                self.compare_op(instruction)
             elif opname == 'RETURN_VALUE':
                 self.return_value(instruction)
-            # elif opname == 'POP_JUMP_IF_FALSE':
-            #     next_block = next(self.block_iter)
-            #     block.end_with_conditonal(stack.pop(), next_block, block_map[arg])
-            #     self.block = next_block
+            elif opname == 'POP_JUMP_IF_FALSE':
+                self.pop_jump_if_false(instruction)
             # elif opname == 'JUMP_ABSOLUTE':
             #     block.end_with_jump(block_map[arg])
             #     self.block = next(self.block_iter)
@@ -182,9 +174,34 @@ class Compiler:
             self.stack.pop().tojit(self.context))
         self.stack.append(Rvalue(int, addition))
 
+    def inplace_add(self, instruction):
+        b = self.stack.pop()
+        a = self.stack.pop()
+        addition = self.context.binary(
+            '+', "int",
+            a.tojit(self.context),
+            b.tojit(self.context))
+        self.stack.append(Rvalue(int, addition))
+
+    def compare_op(self, instruction):
+        b = self.stack.pop()
+        a = self.stack.pop()
+        comparison = self.context.comparison(
+            dis.cmp_op[instruction.arg],
+            a.tojit(self.context),
+            b.tojit(self.context))
+        self.stack.append(Rvalue(int, comparison))
+
     def return_value(self, instruction):
         self.block.end_with_return(self.stack.pop().tojit(self.context))
         self.block = next(self.block_iter, None)
+
+    def pop_jump_if_false(self, instruction):
+        next_block = next(self.block_iter)
+        self.block.end_with_conditonal(
+            self.stack.pop().tojit(self.context),
+            next_block, self.block_map[instruction.arg])
+        self.block = next_block
 
 
 def compile_to_context(context, name, code):
