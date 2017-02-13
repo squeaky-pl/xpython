@@ -107,44 +107,15 @@ class Compiler:
         self.block_stack = []
 
     def compile(self):
-        stack = self.stack
-        block_stack = self.block_stack
-        block_map = self.block_map
-        variables = self.variables
-        context = self.context
         for instruction in dis.get_instructions(self.code):
-            block = self.block
-            opname = instruction.opname
-            argval = instruction.argval
-            arg = instruction.arg
-            if opname == 'LOAD_CONST':
-                self.load_const(instruction)
-            elif opname == 'STORE_FAST':
-                self.store_fast(instruction)
-            elif opname == 'LOAD_FAST':
-                self.load_fast(instruction)
-            elif opname == 'BINARY_ADD':
-                self.binary_add(instruction)
-            elif opname == 'INPLACE_ADD':
-                self.inplace_add(instruction)
-            elif opname == 'COMPARE_OP':
-                self.compare_op(instruction)
-            elif opname == 'RETURN_VALUE':
-                self.return_value(instruction)
-            elif opname == 'POP_JUMP_IF_FALSE':
-                self.pop_jump_if_false(instruction)
-            elif opname == 'JUMP_ABSOLUTE':
-                self.jump_absolute(instruction)
-            elif opname == 'BREAK_LOOP':
-                self.break_loop(instruction)
-            elif opname == 'SETUP_LOOP':
-                self.setup_loop(instruction)
-            elif opname == 'POP_BLOCK':
-                self.pop_block(instruction)
-            else:
-                assert 0, "Unknown opname " + opname
+            try:
+                handler = getattr(self, instruction.opname.lower())
+            except AttributeError:
+                assert 0, "Unknown opname " + instruction.opname
 
-            print('stack {}'.format(stack))
+            handler(instruction)
+
+            print('stack {}'.format(self.stack))
 
     def load_const(self, instruction):
         self.stack.append(Constant(instruction.argval))
