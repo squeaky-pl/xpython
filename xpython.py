@@ -133,19 +133,14 @@ class Compiler:
                 self.return_value(instruction)
             elif opname == 'POP_JUMP_IF_FALSE':
                 self.pop_jump_if_false(instruction)
-            # elif opname == 'JUMP_ABSOLUTE':
-            #     block.end_with_jump(block_map[arg])
-            #     self.block = next(self.block_iter)
-            # elif opname == 'BREAK_LOOP':
-            #     block.end_with_jump(block_stack[-1])
-            #     self.block = next(self.block_iter)
-            # elif opname == 'SETUP_LOOP':
-            #     block_stack.append(block_map[instruction.offset + arg])
-            #     next_block = next(self.block_iter)
-            #     block.end_with_jump(next_block)
-            #     self.block = next_block
-            # elif opname == 'POP_BLOCK':
-            #     block_stack.pop()
+            elif opname == 'JUMP_ABSOLUTE':
+                self.jump_absolute(instruction)
+            elif opname == 'BREAK_LOOP':
+                self.break_loop(instruction)
+            elif opname == 'SETUP_LOOP':
+                self.setup_loop(instruction)
+            elif opname == 'POP_BLOCK':
+                self.pop_block(instruction)
             else:
                 assert 0, "Unknown opname " + opname
 
@@ -203,6 +198,23 @@ class Compiler:
             next_block, self.block_map[instruction.arg])
         self.block = next_block
 
+    def jump_absolute(self, instruction):
+        self.block.end_with_jump(self.block_map[instruction.arg])
+        self.block = next(self.block_iter)
+
+    def break_loop(self, instruction):
+        self.block.end_with_jump(self.block_stack[-1])
+        self.block = next(self.block_iter)
+
+    def setup_loop(self, instruction):
+        self.block_stack.append(
+            self.block_map[instruction.offset + instruction.arg])
+        next_block = next(self.block_iter)
+        self.block.end_with_jump(next_block)
+        self.block = next_block
+
+    def pop_block(self, instruction):
+        self.block_stack.pop()
 
 def compile_to_context(context, name, code):
     compiler = Compiler(context, name, code)
