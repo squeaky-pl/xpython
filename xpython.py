@@ -13,6 +13,55 @@ block_boundaries = [
 ]
 
 
+class Rvalue:
+    def __init__(self, typ, _jit=None):
+        self.typ = typ
+        self._jit = _jit
+
+    def tojit(self, context):
+        if not self._jit:
+            self._jit = self._tojit(context)
+
+        return self._jit
+
+
+class Constant(Rvalue):
+    def __init__(self, value):
+        self.value = value
+        super().__init__(type(value))
+
+    def _tojit(self, context):
+        if self.typ is int:
+            return context.integer(self.value)
+
+        assert 0, "Dont know what to do with {}".format(self.value)
+
+
+class Local(Rvalue):
+    def __init__(self, function, typ, name):
+        self.name = name
+        self.function = function
+        super().__init__(typ)
+
+    def _tojit(self, context):
+        if self.typ is int:
+            return context.local(self.function, "int", self.name)
+
+        assert 0, "Dont know what to do with {}".format(self)
+
+
+class Param(Rvalue):
+    def __init__(self, typ, name):
+        self.name = name
+        super().__init__(typ)
+
+    def _tojit(self, context):
+        if self.typ is int:
+            return context.param("int", self.name)
+
+        assert 0, "Dont know what to do with {}".format(self)
+
+
 class Compiler:
     def __init__(self, context, name, code):
         self.context = context
@@ -23,19 +72,20 @@ class Compiler:
     def setup_function(self):
         code = self.code
         self.variables = []
+        params = []
 
         # setup parameters
         for i in range(code.co_argcount):
-            self.variables.append(
-                self.context.param("int", code.co_varnames[i]))
+            self.variables.append(Param(int, code.co_varnames[i]))
+            params = [v.tojit(self.context) for v in self.variables]
 
         self.function = self.context.exported_function(
-            "int", self.name, self.variables)
+            "int", self.name, params)
 
         # setup locals
         for i in range(code.co_argcount, code.co_nlocals):
             self.variables.append(
-                self.context.local(self.function, "int", code.co_varnames[i]))
+                Local(self.function, None, code.co_varnames[i]))
 
     def setup_blocks(self):
         blocks = []
@@ -70,56 +120,71 @@ class Compiler:
             if opname == 'LOAD_CONST':
                 self.load_const(instruction)
             elif opname == 'STORE_FAST':
-                block.add_assignment(variables[arg], stack.pop())
+                self.store_fast(instruction)
             elif opname == 'LOAD_FAST':
-                stack.append(variables[arg])
+                self.load_fast(instruction)
             elif opname == 'BINARY_ADD':
-                # stack.append(stack.pop() + stack.pop())
-                addition = context.binary('+', "int", stack.pop(), stack.pop())
-                stack.append(addition)
-            elif opname == 'INPLACE_ADD':
-                b = stack.pop()
-                a = stack.pop()
-                addition = context.binary('+', "int", a, b)
-                stack.append(addition)
-            elif opname == 'COMPARE_OP':
-                b = stack.pop()
-                a = stack.pop()
-                comparison = context.comparison(dis.cmp_op[arg], a, b)
-                stack.append(comparison)
+                self.binary_add(instruction)
+            # elif opname == 'INPLACE_ADD':
+            #     b = stack.pop()
+            #     a = stack.pop()
+            #     addition = context.binary('+', "int", a, b)
+            #     stack.append(addition)
+            # elif opname == 'COMPARE_OP':
+            #     b = stack.pop()
+            #     a = stack.pop()
+            #     comparison = context.comparison(dis.cmp_op[arg], a, b)
+            #     stack.append(comparison)
             elif opname == 'RETURN_VALUE':
-                block.end_with_return(stack.pop())
-                self.block = next(self.block_iter, None)
-                # ret = stack.pop()
-            elif opname == 'POP_JUMP_IF_FALSE':
-                next_block = next(self.block_iter)
-                block.end_with_conditonal(stack.pop(), next_block, block_map[arg])
-                self.block = next_block
-            elif opname == 'JUMP_ABSOLUTE':
-                block.end_with_jump(block_map[arg])
-                self.block = next(self.block_iter)
-            elif opname == 'BREAK_LOOP':
-                block.end_with_jump(block_stack[-1])
-                self.block = next(self.block_iter)
-            elif opname == 'SETUP_LOOP':
-                block_stack.append(block_map[instruction.offset + arg])
-                next_block = next(self.block_iter)
-                block.end_with_jump(next_block)
-                self.block = next_block
-            elif opname == 'POP_BLOCK':
-                block_stack.pop()
+                self.return_value(instruction)
+            # elif opname == 'POP_JUMP_IF_FALSE':
+            #     next_block = next(self.block_iter)
+            #     block.end_with_conditonal(stack.pop(), next_block, block_map[arg])
+            #     self.block = next_block
+            # elif opname == 'JUMP_ABSOLUTE':
+            #     block.end_with_jump(block_map[arg])
+            #     self.block = next(self.block_iter)
+            # elif opname == 'BREAK_LOOP':
+            #     block.end_with_jump(block_stack[-1])
+            #     self.block = next(self.block_iter)
+            # elif opname == 'SETUP_LOOP':
+            #     block_stack.append(block_map[instruction.offset + arg])
+            #     next_block = next(self.block_iter)
+            #     block.end_with_jump(next_block)
+            #     self.block = next_block
+            # elif opname == 'POP_BLOCK':
+            #     block_stack.pop()
             else:
                 assert 0, "Unknown opname " + opname
 
             print('stack {}'.format(stack))
 
     def load_const(self, instruction):
-        argval = instruction.argval
-        if isinstance(argval, int):
-            value = self.context.integer(argval)
-        else:
-            assert 0, "Dont know what to do with {}".format(argval)
-        self.stack.append(value)
+        self.stack.append(Constant(instruction.argval))
+
+    def store_fast(self, instruction):
+        variable = self.variables[instruction.arg]
+        a = self.stack.pop()
+        if not variable.typ:
+            variable.typ = a.typ
+
+        self.block.add_assignment(
+            variable.tojit(self.context),
+            a.tojit(self.context))
+
+    def load_fast(self, instruction):
+        self.stack.append(self.variables[instruction.arg])
+
+    def binary_add(self, instruction):
+        addition = self.context.binary(
+            '+', "int",
+            self.stack.pop().tojit(self.context),
+            self.stack.pop().tojit(self.context))
+        self.stack.append(Rvalue(int, addition))
+
+    def return_value(self, instruction):
+        self.block.end_with_return(self.stack.pop().tojit(self.context))
+        self.block = next(self.block_iter, None)
 
 
 def compile_to_context(context, name, code):
