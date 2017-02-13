@@ -7,6 +7,11 @@ def get_fun_code(source):
     return module.co_consts[0]
 
 
+block_boundaries = [
+    'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'SETUP_LOOP', 'JUMP_ABSOLUTE'
+]
+
+
 def compile_to_context(context, name, code):
     stack = []
     variables = []
@@ -25,7 +30,7 @@ def compile_to_context(context, name, code):
     for instruction in dis.get_instructions(code):
         if current_block_pos is None:
             current_block_pos = instruction.offset
-        if instruction.opname in ['RETURN_VALUE', 'POP_JUMP_IF_FALSE']:
+        if instruction.opname in block_boundaries:
             block = context.block(func)
             blocks.append(block)
             block_map[current_block_pos] = block
@@ -33,8 +38,9 @@ def compile_to_context(context, name, code):
 
     print(block_map)
 
-    # setup space for locals
-    variables.extend([None] * (code.co_nlocals - code.co_argcount))
+    # setup locals
+    for i in range(code.co_argcount, code.co_nlocals):
+        variables.append(context.local(func, "int", code.co_varnames[i]))
 
     block_iter = iter(blocks)
     block = next(block_iter)
@@ -47,12 +53,17 @@ def compile_to_context(context, name, code):
             # stack.append(argval)
             stack.append(context.integer(argval))
         elif opname == 'STORE_FAST':
-            variables[arg] = stack.pop()
+            block.add_assignment(variables[arg], stack.pop())
         elif opname == 'LOAD_FAST':
             stack.append(variables[arg])
         elif opname == 'BINARY_ADD':
             # stack.append(stack.pop() + stack.pop())
             addition = context.binary('+', "int", stack.pop(), stack.pop())
+            stack.append(addition)
+        elif opname == 'INPLACE_ADD':
+            b = stack.pop()
+            a = stack.pop()
+            addition = context.binary('+', "int", a, b)
             stack.append(addition)
         elif opname == 'COMPARE_OP':
             b = stack.pop()
@@ -67,6 +78,15 @@ def compile_to_context(context, name, code):
             next_block = next(block_iter)
             block.end_with_conditonal(stack.pop(), next_block, block_map[arg])
             block = next_block
+        elif opname == 'JUMP_ABSOLUTE':
+            block.end_with_jump(block_map[arg])
+            block = next(block_iter)
+        elif opname == 'SETUP_LOOP':
+            next_block = next(block_iter)
+            block.end_with_jump(next_block)
+            block = next_block
+        elif opname == 'POP_BLOCK':
+            pass
         else:
             assert 0, "Unknown opname " + opname
 
