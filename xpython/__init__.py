@@ -8,7 +8,7 @@ def get_fun_code(source):
 
 
 block_boundaries = [
-    'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'SETUP_LOOP', 'JUMP_ABSOLUTE',
+    'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE', 'SETUP_LOOP', 'JUMP_ABSOLUTE',
     'BREAK_LOOP'
 ]
 
@@ -58,16 +58,21 @@ class Param(Rvalue):
     def _tojit(self, context):
         if self.typ is int:
             return context.param("int", self.name)
+        elif self.typ is bytearray:
+            char_p = context.pointer_type("char")
+            return context.param(char_p, self.name)
 
         assert 0, "Dont know what to do with {}".format(self)
 
 
 class Compiler:
-    def __init__(self, context, name, code):
+    def __init__(self, context, name, code, param_types):
         self.context = context
         self.name = name
         self.code = code
+        self.param_types = param_types
         self.stack = []
+
 
     def setup_function(self):
         code = self.code
@@ -76,7 +81,8 @@ class Compiler:
 
         # setup parameters
         for i in range(code.co_argcount):
-            self.variables.append(Param(int, code.co_varnames[i]))
+            self.variables.append(
+                Param(self.param_types[i], code.co_varnames[i]))
             params = [v.tojit(self.context) for v in self.variables]
 
         self.function = self.context.exported_function(
@@ -158,6 +164,22 @@ class Compiler:
             b.tojit(self.context))
         self.stack.append(Rvalue(int, comparison))
 
+    def store_subscr(self, instruction):
+        index = self.stack.pop()
+        where = self.stack.pop()
+        what = self.stack.pop()
+
+        assert index.typ is int, "index must be int"
+        assert where.typ is bytearray, "where must be bytearray"
+        assert what.typ is int, "what must be int"
+
+        lvalue = self.context.array_access(
+            where.tojit(self.context), index.tojit(self.context))
+
+        narrow_cast = self.context.cast(what.tojit(self.context), "char")
+
+        self.block.add_assignment(lvalue, narrow_cast)
+
     def return_value(self, instruction):
         self.block.end_with_return(self.stack.pop().tojit(self.context))
         self.block = next(self.block_iter, None)
@@ -167,6 +189,13 @@ class Compiler:
         self.block.end_with_conditonal(
             self.stack.pop().tojit(self.context),
             next_block, self.block_map[instruction.arg])
+        self.block = next_block
+
+    def pop_jump_if_true(self, instruction):
+        next_block = next(self.block_iter)
+        self.block.end_with_conditonal(
+            self.stack.pop().tojit(self.context),
+            self.block_map[instruction.arg], next_block)
         self.block = next_block
 
     def jump_absolute(self, instruction):
@@ -187,8 +216,8 @@ class Compiler:
     def pop_block(self, instruction):
         self.block_stack.pop()
 
-def compile_to_context(context, name, code):
-    compiler = Compiler(context, name, code)
+def compile_to_context(context, name, code, param_types):
+    compiler = Compiler(context, name, code, param_types)
     compiler.setup_function()
     compiler.setup_blocks()
     compiler.compile()
