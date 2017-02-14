@@ -1,6 +1,40 @@
 from collections import OrderedDict
 import gccjit
 import dis
+from cffi import FFI
+
+
+ffi = FFI()
+ffi.cdef("""
+typedef struct {
+    unsigned long size;
+    char* data;
+} buffer;
+
+typedef struct {
+    unsigned long size;
+    const char* data;
+} ibuffer;
+""")
+
+
+class Buffer:
+    def __init__(self, data):
+        self._data = ffi.new("char[]", data)
+        self._ffi = ffi.new("buffer*")
+        self._ffi.data = self._data
+
+    @property
+    def data(self):
+        return ffi.unpack(self._data, self.size)
+
+    @property
+    def size(self):
+        return len(self._data) - 1
+
+    @property
+    def ffi(self):
+        return self._ffi
 
 
 def get_fun_code(source):
@@ -85,6 +119,12 @@ class Compiler:
         self.code = code
         self.param_types = param_types
         self.stack = []
+
+    def setup_common(self):
+        char_p = self.context.pointer_type("char")
+        size = self.context.field("unsigned long", "size")
+        data = self.context.field(char_p, "data")
+        self.buffer_type = self.context.struct_type("buffer", [size, data])
 
     def setup_function(self):
         code = self.code
@@ -291,6 +331,7 @@ class Compiler:
 
 def compile_to_context(context, name, code, param_types):
     compiler = Compiler(context, name, code, param_types)
+    compiler.setup_common()
     compiler.setup_function()
     compiler.setup_blocks()
     compiler.compile()
