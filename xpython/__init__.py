@@ -22,6 +22,7 @@ class Buffer:
     def __init__(self, data):
         self._data = ffi.new("char[]", data)
         self._ffi = ffi.new("buffer*")
+        self._ffi.size = self.size
         self._ffi.data = self._data
 
     @property
@@ -134,6 +135,29 @@ class Compiler:
         self.buffer_p_type = self.context.pointer_type(self.buffer_type)
         # TODO FIXME to jit should depend on compiler?
         self.context.buffer_p_type = self.buffer_p_type
+
+        __builtin_trap = self.context.builtin_function("__builtin_trap")
+
+        # bound check code
+        buffer_param = self.context.param(self.buffer_p_type, "buffer")
+        index_param = self.context.param("unsigned long", "index")
+        self.bound_check = self.context.internal_function(
+             "void", "bound_check", [buffer_param, index_param])
+
+        cmp_block = self.context.block(self.bound_check)
+        trap_block = self.context.block(self.bound_check)
+        ret_block = self.context.block(self.bound_check)
+
+        size = self.context.dereference_field(buffer_param, self.size_field)
+        comparison = self.context.comparison('<', index_param, size)
+        cmp_block.end_with_conditonal(comparison, ret_block, trap_block)
+
+        trap_call = self.context.call(__builtin_trap)
+        trap_block.add_eval(trap_call)
+        trap_block.end_with_void_return()
+
+        ret_block.end_with_void_return()
+
 
     def setup_function(self):
         code = self.code
@@ -251,12 +275,18 @@ class Compiler:
         where = self.stack.pop()
         what = self.stack.pop()
 
-        assert index.typ is int, "index must be int"
+        assert index.typ in (int, "unsigned"), "index must be integer"
         assert where.typ == 'buffer', "where must be buffer"
         assert what.typ == 'byte', "what must be byte"
 
         data = self.context.dereference_field(
             where.tojit(self.context), self.data_field)
+
+        bound_check_call = self.context.call(
+            self.bound_check,
+            [where.tojit(self.context), index.tojit(self.context)])
+        self.block.add_eval(bound_check_call)
+
         lvalue = self.context.array_access(
             data, index.tojit(self.context))
 
