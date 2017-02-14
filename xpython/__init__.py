@@ -106,8 +106,8 @@ class Param(Rvalue):
         if self.typ is int:
             return context.param("int", self.name)
         elif self.typ == 'buffer':
-            char_p = context.pointer_type("char")
-            return context.param(char_p, self.name)
+            # TODO FIXME to jit should depend on compiler?
+            return context.param(context.buffer_p_type, self.name)
 
         assert 0, "Dont know what to do with {}".format(self)
 
@@ -122,9 +122,13 @@ class Compiler:
 
     def setup_common(self):
         char_p = self.context.pointer_type("char")
-        size = self.context.field("unsigned long", "size")
-        data = self.context.field(char_p, "data")
-        self.buffer_type = self.context.struct_type("buffer", [size, data])
+        self.size_field = self.context.field("unsigned long", "size")
+        self.data_field = self.context.field(char_p, "data")
+        self.buffer_type = self.context.struct_type(
+            "buffer", [self.size_field, self.data_field])
+        self.buffer_p_type = self.context.pointer_type(self.buffer_type)
+        # TODO FIXME to jit should depend on compiler?
+        self.context.buffer_p_type = self.buffer_p_type
 
     def setup_function(self):
         code = self.code
@@ -246,8 +250,10 @@ class Compiler:
         assert where.typ == 'buffer', "where must be buffer"
         assert what.typ == 'byte', "what must be byte"
 
+        data = self.context.dereference_field(
+            where.tojit(self.context), self.data_field)
         lvalue = self.context.array_access(
-            where.tojit(self.context), index.tojit(self.context))
+            data, index.tojit(self.context))
 
         self.block.add_assignment(lvalue, what.tojit(self.context))
 
