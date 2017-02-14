@@ -71,7 +71,7 @@ class Param(Rvalue):
     def _tojit(self, context):
         if self.typ is int:
             return context.param("int", self.name)
-        elif self.typ is bytearray:
+        elif self.typ == 'buffer':
             char_p = context.pointer_type("char")
             return context.param(char_p, self.name)
 
@@ -203,7 +203,7 @@ class Compiler:
         what = self.stack.pop()
 
         assert index.typ is int, "index must be int"
-        assert where.typ is bytearray, "where must be bytearray"
+        assert where.typ == 'buffer', "where must be buffer"
         assert what.typ == 'byte', "what must be byte"
 
         lvalue = self.context.array_access(
