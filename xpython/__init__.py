@@ -136,7 +136,7 @@ class Compiler:
         # TODO FIXME to jit should depend on compiler?
         self.context.buffer_p_type = self.buffer_p_type
 
-        __builtin_trap = self.context.builtin_function("__builtin_trap")
+        abort = self.context.imported_function("void", "abort")
 
         # bound check code
         buffer_param = self.context.param(self.buffer_p_type, "buffer")
@@ -152,7 +152,7 @@ class Compiler:
         comparison = self.context.comparison('<', index_param, size)
         cmp_block.end_with_conditonal(comparison, ret_block, trap_block)
 
-        trap_call = self.context.call(__builtin_trap)
+        trap_call = self.context.call(abort)
         trap_block.add_eval(trap_call)
         trap_block.end_with_void_return()
 
