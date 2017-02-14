@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import gccjit
 import dis
 
@@ -37,6 +38,15 @@ class Constant(Rvalue):
         assert 0, "Dont know what to do with {}".format(self.value)
 
 
+class Global:
+    def __init__(self, name):
+        self.name = name
+
+
+class Unreachable:
+    pass
+
+
 class Local(Rvalue):
     def __init__(self, function, typ, name):
         self.name = name
@@ -73,7 +83,6 @@ class Compiler:
         self.param_types = param_types
         self.stack = []
 
-
     def setup_function(self):
         code = self.code
         self.variables = []
@@ -93,22 +102,40 @@ class Compiler:
             self.variables.append(
                 Local(self.function, None, code.co_varnames[i]))
 
+    def make_block(self, instruction):
+        return self.context.block(
+            self.function, '{0.offset} {0.opname}'.format(instruction))
+
     def setup_blocks(self):
-        blocks = []
-        self.block_map = {}
-        current_block_pos = None
-        for instruction in dis.get_instructions(self.code):
-            if current_block_pos is None:
-                current_block_pos = instruction.offset
+        self.block_map = OrderedDict()
+
+        instructions = OrderedDict(
+            (i.offset, i) for i in dis.get_instructions(self.code))
+
+        block = self.make_block(instructions[0])
+        self.block_map[0] = block
+
+        for instruction in instructions.values():
+            if instruction.offset in self.block_map:
+                continue
+
+            if instruction.is_jump_target:
+                block = self.make_block(instruction)
+                self.block_map[instruction.offset] = block
+                continue
+
             if instruction.opname in block_boundaries:
-                block = self.context.block(self.function)
-                blocks.append(block)
-                self.block_map[current_block_pos] = block
-                current_block_pos = None
+                offset = instruction.offset + 2
+                # check if this is the last instruction
+                if offset == len(self.code.co_code):
+                    break
+
+                block = self.make_block(instructions[offset])
+                self.block_map[offset] = block
 
         print(self.block_map)
 
-        self.block_iter = iter(blocks)
+        self.block_iter = iter(self.block_map.values())
         self.block = next(self.block_iter)
         self.block_stack = []
 
@@ -121,10 +148,13 @@ class Compiler:
 
             handler(instruction)
 
-            print('stack {}'.format(self.stack))
+            print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_const(self, instruction):
         self.stack.append(Constant(instruction.argval))
+
+    def load_global(self, instruction):
+        self.stack.append(Global(instruction.argval))
 
     def store_fast(self, instruction):
         variable = self.variables[instruction.arg]
@@ -180,6 +210,18 @@ class Compiler:
 
         self.block.add_assignment(lvalue, narrow_cast)
 
+    def call_function(self, instruction):
+        function = self.stack.pop()
+
+        if isinstance(function, Global) and \
+           function.name == 'abort' and instruction.arg == 0:
+            __builtin_trap = self.context.builtin_function('__builtin_trap')
+            trap_call = self.context.call(__builtin_trap)
+            self.block.add_eval(trap_call)
+            self.stack.append(Unreachable())
+        else:
+            assert 0, "Don't know what to do with {}".format(function)
+
     def return_value(self, instruction):
         self.block.end_with_return(self.stack.pop().tojit(self.context))
         self.block = next(self.block_iter, None)
@@ -198,6 +240,16 @@ class Compiler:
             self.block_map[instruction.arg], next_block)
         self.block = next_block
 
+    def pop_top(self, instruction):
+        top = self.stack.pop()
+
+        if isinstance(top, Unreachable):
+            next_block = next(self.block_iter)
+            self.block.end_with_jump(next_block)
+            self.block = next_block
+        else:
+            assert 0, "Dont know how to handle {}".format(top)
+
     def jump_absolute(self, instruction):
         self.block.end_with_jump(self.block_map[instruction.arg])
         self.block = next(self.block_iter)
@@ -214,6 +266,9 @@ class Compiler:
         self.block = next_block
 
     def pop_block(self, instruction):
+        next_block = next(self.block_iter)
+        self.block.end_with_jump(next_block)
+        self.block = next_block
         self.block_stack.pop()
 
 def compile_to_context(context, name, code, param_types):
