@@ -18,6 +18,18 @@ typedef struct {
 """)
 
 
+xtype_to_c = {
+    int: "int",
+    "byte": "char",
+    "unsigned": "unsigned long",
+    "signed": "signed long"
+}
+
+
+def xtypeasc(typ):
+    return xtype_to_c[typ]
+
+
 class Buffer:
     def __init__(self, data):
         self._data = ffi.new("char[]", data)
@@ -119,10 +131,11 @@ class Param(Rvalue):
 
 
 class Compiler:
-    def __init__(self, context, name, code, param_types):
+    def __init__(self, context, code, ret_type, name, param_types):
         self.context = context
-        self.name = name
         self.code = code
+        self.ret_type = ret_type
+        self.name = name
         self.param_types = param_types
         self.stack = []
 
@@ -171,7 +184,7 @@ class Compiler:
             params = [v.tojit(self.context) for v in self.variables]
 
         self.function = self.context.exported_function(
-            "int", self.name, params)
+            xtypeasc(self.ret_type), self.name, params)
 
         # setup locals
         for i in range(code.co_argcount, code.co_nlocals):
@@ -292,6 +305,26 @@ class Compiler:
 
         self.block.add_assignment(lvalue, what.tojit(self.context))
 
+    def binary_subscr(self, instruction):
+        index = self.stack.pop()
+        where = self.stack.pop()
+
+        assert index.typ in (int, "unsigned"), "index must be integer"
+        assert where.typ == 'buffer', "where must be buffer"
+
+        data = self.context.dereference_field(
+            where.tojit(self.context), self.data_field)
+
+        bound_check_call = self.context.call(
+            self.bound_check,
+            [where.tojit(self.context), index.tojit(self.context)])
+        self.block.add_eval(bound_check_call)
+
+        rvalue = self.context.array_access(
+            data, index.tojit(self.context))
+
+        self.stack.append(Rvalue("byte", rvalue))
+
     def call_function(self, instruction):
         arguments = []
         for _ in range(instruction.arg):
@@ -370,8 +403,8 @@ class Compiler:
         self.block = next_block
         self.block_stack.pop()
 
-def compile_to_context(context, name, code, param_types):
-    compiler = Compiler(context, name, code, param_types)
+def compile_to_context(context, code, ret_type, name, param_types):
+    compiler = Compiler(context, code, ret_type, name, param_types)
     compiler.setup_common()
     compiler.setup_function()
     compiler.setup_blocks()
