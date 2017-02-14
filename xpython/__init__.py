@@ -4,26 +4,31 @@ import dis
 from cffi import FFI
 
 
-ffi = FFI()
-ffi.cdef("""
-typedef struct {
-    unsigned long size;
-    char* data;
-} buffer;
-
-typedef struct {
-    unsigned long size;
-    const char* data;
-} ibuffer;
-""")
-
-
 xtype_to_c = {
     int: "int",
     "byte": "char",
     "unsigned": "unsigned long",
-    "signed": "signed long"
+    "signed": "signed long",
+    "void": "void"
 }
+
+
+DEFAULT_INTEGER_TYPE = int
+DEFAULT_INTEGER_CTYPE = xtype_to_c[DEFAULT_INTEGER_TYPE]
+BOUND_CHECKS = True
+
+ffi = FFI()
+ffi.cdef("""
+typedef struct {{
+    {ctype} size;
+    char* data;
+}} buffer;
+
+typedef struct {{
+    {ctype} size;
+    const char* data;
+}} ibuffer;
+""".format(ctype=DEFAULT_INTEGER_CTYPE))
 
 
 def xtypeasc(typ):
@@ -79,14 +84,7 @@ class Constant(Rvalue):
         super().__init__(typ)
 
     def _tojit(self, context):
-        if self.typ is int:
-            return context.integer(self.value)
-        elif self.typ == 'unsigned':
-            return context.integer(self.value, 'unsigned long')
-        elif self.typ == 'byte':
-            return context.integer(self.value, 'char')
-
-        assert 0, "Dont know what to do with {}".format(self.value)
+        return context.integer(self.value, xtypeasc(self.typ))
 
 
 class Global:
@@ -105,12 +103,7 @@ class Local(Rvalue):
         super().__init__(typ)
 
     def _tojit(self, context):
-        if self.typ is int:
-            return context.local(self.function, "int", self.name)
-        elif self.typ == 'unsigned':
-            return context.local(self.function, "unsigned long", self.name)
-
-        assert 0, "Dont know what to do with {}".format(self)
+        return context.local(self.function, xtypeasc(self.typ), self.name)
 
 
 class Param(Rvalue):
@@ -119,15 +112,12 @@ class Param(Rvalue):
         super().__init__(typ)
 
     def _tojit(self, context):
-        if self.typ is int:
-            return context.param("int", self.name)
-        elif self.typ == 'unsigned':
-            return context.param("unsigned long", self.name)
-        elif self.typ == 'buffer':
-            # TODO FIXME to jit should depend on compiler?
-            return context.param(context.buffer_p_type, self.name)
+        if self.typ == 'buffer':
+            ctyp = context.buffer_p_type
+        else:
+            ctyp = xtypeasc(self.typ)
 
-        assert 0, "Dont know what to do with {}".format(self)
+        return context.param(ctyp, self.name)
 
 
 class Compiler:
@@ -141,7 +131,7 @@ class Compiler:
 
     def setup_common(self):
         char_p = self.context.pointer_type("char")
-        self.size_field = self.context.field("unsigned long", "size")
+        self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
         self.data_field = self.context.field(char_p, "data")
         self.buffer_type = self.context.struct_type(
             "buffer", [self.size_field, self.data_field])
@@ -149,27 +139,28 @@ class Compiler:
         # TODO FIXME to jit should depend on compiler?
         self.context.buffer_p_type = self.buffer_p_type
 
-        abort = self.context.imported_function("void", "abort")
+        if BOUND_CHECKS:
+            abort = self.context.imported_function("void", "abort")
 
-        # bound check code
-        buffer_param = self.context.param(self.buffer_p_type, "buffer")
-        index_param = self.context.param("unsigned long", "index")
-        self.bound_check = self.context.internal_function(
-             "void", "bound_check", [buffer_param, index_param])
+            # bound check code
+            buffer_param = self.context.param(self.buffer_p_type, "buffer")
+            index_param = self.context.param(DEFAULT_INTEGER_CTYPE, "index")
+            self.bound_check = self.context.internal_function(
+                 "void", "bound_check", [buffer_param, index_param])
 
-        cmp_block = self.context.block(self.bound_check)
-        trap_block = self.context.block(self.bound_check)
-        ret_block = self.context.block(self.bound_check)
+            cmp_block = self.context.block(self.bound_check)
+            trap_block = self.context.block(self.bound_check)
+            ret_block = self.context.block(self.bound_check)
 
-        size = self.context.dereference_field(buffer_param, self.size_field)
-        comparison = self.context.comparison('<', index_param, size)
-        cmp_block.end_with_conditonal(comparison, ret_block, trap_block)
+            size = self.context.dereference_field(buffer_param, self.size_field)
+            comparison = self.context.comparison('<', index_param, size)
+            cmp_block.end_with_conditonal(comparison, ret_block, trap_block)
 
-        trap_call = self.context.call(abort)
-        trap_block.add_eval(trap_call)
-        trap_block.end_with_void_return()
+            trap_call = self.context.call(abort)
+            trap_block.add_eval(trap_call)
+            trap_block.end_with_void_return()
 
-        ret_block.end_with_void_return()
+            ret_block.end_with_void_return()
 
 
     def setup_function(self):
@@ -240,7 +231,7 @@ class Compiler:
             print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_const(self, instruction):
-        self.stack.append(Constant(int, instruction.argval))
+        self.stack.append(Constant(DEFAULT_INTEGER_TYPE, instruction.argval))
 
     def load_global(self, instruction):
         self.stack.append(Global(instruction.argval))
@@ -260,19 +251,19 @@ class Compiler:
 
     def binary_add(self, instruction):
         addition = self.context.binary(
-            '+', "int",
+            '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             self.stack.pop().tojit(self.context),
             self.stack.pop().tojit(self.context))
-        self.stack.append(Rvalue(int, addition))
+        self.stack.append(Rvalue("unsigned", addition))
 
     def inplace_add(self, instruction):
         b = self.stack.pop()
         a = self.stack.pop()
         addition = self.context.binary(
-            '+', "int",
+            '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(int, addition))
+        self.stack.append(Rvalue("unsigned", addition))
 
     def compare_op(self, instruction):
         b = self.stack.pop()
@@ -295,10 +286,11 @@ class Compiler:
         data = self.context.dereference_field(
             where.tojit(self.context), self.data_field)
 
-        bound_check_call = self.context.call(
-            self.bound_check,
-            [where.tojit(self.context), index.tojit(self.context)])
-        self.block.add_eval(bound_check_call)
+        if BOUND_CHECKS:
+            bound_check_call = self.context.call(
+                self.bound_check,
+                [where.tojit(self.context), index.tojit(self.context)])
+            self.block.add_eval(bound_check_call)
 
         lvalue = self.context.array_access(
             data, index.tojit(self.context))
@@ -315,10 +307,11 @@ class Compiler:
         data = self.context.dereference_field(
             where.tojit(self.context), self.data_field)
 
-        bound_check_call = self.context.call(
-            self.bound_check,
-            [where.tojit(self.context), index.tojit(self.context)])
-        self.block.add_eval(bound_check_call)
+        if BOUND_CHECKS:
+            bound_check_call = self.context.call(
+                self.bound_check,
+                [where.tojit(self.context), index.tojit(self.context)])
+            self.block.add_eval(bound_check_call)
 
         rvalue = self.context.array_access(
             data, index.tojit(self.context))
@@ -351,11 +344,27 @@ class Compiler:
 
                     return
 
+            if function.name == 'len' and instruction.arg == 1:
+                rvalue = arguments[0]
+
+                if isinstance(rvalue, Rvalue) and rvalue.typ == 'buffer':
+                    size = self.context.dereference_field(
+                        rvalue.tojit(self.context), self.size_field)
+
+                    self.stack.append(Rvalue("unsigned", size))
+
+                    return
+
         assert 0, "Don't know what to do with {}({})".format(
             function, arguments)
 
     def return_value(self, instruction):
-        self.block.end_with_return(self.stack.pop().tojit(self.context))
+        retval = self.stack.pop()
+        if self.ret_type != 'void':
+            self.block.end_with_return(retval.tojit(self.context))
+        else:
+            self.block.end_with_void_return()
+
         self.block = next(self.block_iter, None)
 
     def pop_jump_if_false(self, instruction):
