@@ -254,7 +254,27 @@ class Compiler:
             '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             self.stack.pop().tojit(self.context),
             self.stack.pop().tojit(self.context))
-        self.stack.append(Rvalue("unsigned", addition))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, addition))
+
+    def binary_subtract(self, instruction):
+        b = self.stack.pop()
+        a = self.stack.pop()
+        substraction = self.context.binary(
+            '-', xtypeasc(DEFAULT_INTEGER_TYPE),
+            a.tojit(self.context),
+            b.tojit(self.context))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, substraction))
+
+    def binary_floor_divide(self, instruction):
+        # FIXME: this only works for positive numbers!
+        # http://stackoverflow.com/questions/828092/python-style-integer-division-modulus-in-c
+        b = self.stack.pop()
+        a = self.stack.pop()
+        division = self.context.binary(
+            '/', xtypeasc(DEFAULT_INTEGER_TYPE),
+            a.tojit(self.context),
+            b.tojit(self.context))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, division))
 
     def inplace_add(self, instruction):
         b = self.stack.pop()
@@ -263,7 +283,7 @@ class Compiler:
             '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue("unsigned", addition))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, addition))
 
     def compare_op(self, instruction):
         b = self.stack.pop()
