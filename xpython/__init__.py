@@ -27,13 +27,16 @@ class Rvalue:
 
 
 class Constant(Rvalue):
-    def __init__(self, value):
+    def __init__(self, typ, value):
         self.value = value
-        super().__init__(type(value))
+        super().__init__(typ)
 
     def _tojit(self, context):
         if self.typ is int:
             return context.integer(self.value)
+
+        if self.typ == 'byte':
+            return context.integer(self.value, 'char')
 
         assert 0, "Dont know what to do with {}".format(self.value)
 
@@ -151,7 +154,7 @@ class Compiler:
             print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_const(self, instruction):
-        self.stack.append(Constant(instruction.argval))
+        self.stack.append(Constant(int, instruction.argval))
 
     def load_global(self, instruction):
         self.stack.append(Global(instruction.argval))
@@ -201,26 +204,41 @@ class Compiler:
 
         assert index.typ is int, "index must be int"
         assert where.typ is bytearray, "where must be bytearray"
-        assert what.typ is int, "what must be int"
+        assert what.typ == 'byte', "what must be byte"
 
         lvalue = self.context.array_access(
             where.tojit(self.context), index.tojit(self.context))
 
-        narrow_cast = self.context.cast(what.tojit(self.context), "char")
-
-        self.block.add_assignment(lvalue, narrow_cast)
+        self.block.add_assignment(lvalue, what.tojit(self.context))
 
     def call_function(self, instruction):
+        arguments = []
+        for _ in range(instruction.arg):
+            arguments.append(self.stack.pop())
         function = self.stack.pop()
 
-        if isinstance(function, Global) and \
-           function.name == 'abort' and instruction.arg == 0:
-            __builtin_trap = self.context.builtin_function('__builtin_trap')
-            trap_call = self.context.call(__builtin_trap)
-            self.block.add_eval(trap_call)
-            self.stack.append(Unreachable())
-        else:
-            assert 0, "Don't know what to do with {}".format(function)
+        if isinstance(function, Global):
+            if function.name == 'abort' and instruction.arg == 0:
+                __builtin_trap = self.context.builtin_function('__builtin_trap')
+                trap_call = self.context.call(__builtin_trap)
+                self.block.add_eval(trap_call)
+                self.stack.append(Unreachable())
+
+                return
+
+            if function.name == 'byte' and instruction.arg == 1:
+                rvalue = arguments[0]
+
+                if isinstance(rvalue, Constant):
+                    if 0 <= rvalue.value <= 0xff:
+                        self.stack.append(Constant('byte', rvalue.value))
+                    else:
+                        assert 0, "Constant out of bounds for byte"
+
+                    return
+
+        assert 0, "Don't know what to do with {}({})".format(
+            function, arguments)
 
     def return_value(self, instruction):
         self.block.end_with_return(self.stack.pop().tojit(self.context))
