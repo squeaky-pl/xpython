@@ -68,8 +68,9 @@ class Constant(Rvalue):
     def _tojit(self, context):
         if self.typ is int:
             return context.integer(self.value)
-
-        if self.typ == 'byte':
+        elif self.typ == 'unsigned':
+            return context.integer(self.value, 'unsigned long')
+        elif self.typ == 'byte':
             return context.integer(self.value, 'char')
 
         assert 0, "Dont know what to do with {}".format(self.value)
@@ -93,6 +94,8 @@ class Local(Rvalue):
     def _tojit(self, context):
         if self.typ is int:
             return context.local(self.function, "int", self.name)
+        elif self.typ == 'unsigned':
+            return context.local(self.function, "unsigned long", self.name)
 
         assert 0, "Dont know what to do with {}".format(self)
 
@@ -105,6 +108,8 @@ class Param(Rvalue):
     def _tojit(self, context):
         if self.typ is int:
             return context.param("int", self.name)
+        elif self.typ == 'unsigned':
+            return context.param("unsigned long", self.name)
         elif self.typ == 'buffer':
             # TODO FIXME to jit should depend on compiler?
             return context.param(context.buffer_p_type, self.name)
