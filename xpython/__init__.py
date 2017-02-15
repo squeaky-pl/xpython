@@ -371,7 +371,7 @@ class Compiler:
                     size = self.context.dereference_field(
                         rvalue.tojit(self.context), self.size_field)
 
-                    self.stack.append(Rvalue("unsigned", size))
+                    self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, size))
 
                     return
 
