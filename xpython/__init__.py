@@ -76,7 +76,7 @@ def type_repr(typ):
 
 
 class Rvalue:
-    def __init__(self, typ, _jit=None, desc=None):
+    def __init__(self, typ, desc=None, _jit=None):
         self.typ = typ
         self._jit = _jit
         self.desc = desc
@@ -118,6 +118,9 @@ class Global:
     def __init__(self, name):
         self.name = name
 
+    def __repr__(self):
+        return '<Global {}>'.format(self.name)
+
 
 class Unreachable:
     pass
@@ -125,16 +128,15 @@ class Unreachable:
 
 class Local(Rvalue):
     def __init__(self, function, typ, name):
-        self.name = name
         self.function = function
-        super().__init__(typ)
+        super().__init__(typ, name)
 
     def __repr__(self):
         return '<Local {}: {} @{:x}>'.format(
-            self.name, type_repr(self.typ), id(self))
+            self.desc, type_repr(self.typ), id(self))
 
     def _tojit(self, context):
-        return context.local(self.function, xtypeasc(self.typ), self.name)
+        return context.local(self.function, xtypeasc(self.typ), self.desc)
 
 
 class Temporary(Local):
@@ -144,13 +146,12 @@ class Temporary(Local):
 
     def __repr__(self):
         return '<Temporary {}: {} from {}>'.format(
-            self.name, type_repr(self.typ), self.src.name)
+            self.desc, type_repr(self.typ), self.src.desc)
 
 
 class Param(Rvalue):
     def __init__(self, typ, name):
-        self.name = name
-        super().__init__(typ)
+        super().__init__(typ, name)
 
     def _tojit(self, context):
         if self.typ == 'buffer':
@@ -158,7 +159,7 @@ class Param(Rvalue):
         else:
             ctyp = xtypeasc(self.typ)
 
-        return context.param(ctyp, self.name)
+        return context.param(ctyp, self.desc)
 
 
 class Compiler:
@@ -203,7 +204,6 @@ class Compiler:
             trap_block.end_with_void_return()
 
             ret_block.end_with_void_return()
-
 
     def setup_function(self):
         code = self.code
@@ -272,7 +272,6 @@ class Compiler:
 
             handler(instruction)
 
-
     def load_const(self, instruction):
         self.stack.append(Constant.frompy(instruction.argval))
 
@@ -316,7 +315,7 @@ class Compiler:
             '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             self.stack.pop().tojit(self.context),
             self.stack.pop().tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, addition))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '+', addition))
 
     def binary_subtract(self, instruction):
         b = self.stack.pop()
@@ -325,7 +324,7 @@ class Compiler:
             '-', xtypeasc(DEFAULT_INTEGER_TYPE),
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, substraction))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '-', substraction))
 
     def binary_floor_divide(self, instruction):
         # FIXME: this only works for positive numbers!
@@ -336,7 +335,7 @@ class Compiler:
             '/', xtypeasc(DEFAULT_INTEGER_TYPE),
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, division))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '//', division))
 
     def inplace_add(self, instruction):
         b = self.stack.pop()
@@ -345,7 +344,7 @@ class Compiler:
             '+', xtypeasc(DEFAULT_INTEGER_TYPE),
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, addition))
+        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '+', addition))
 
     def compare_op(self, instruction):
         b = self.stack.pop()
@@ -354,7 +353,7 @@ class Compiler:
             dis.cmp_op[instruction.arg],
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(int, comparison))
+        self.stack.append(Rvalue(int, 'comp', comparison))
 
     def unpack_sequence(self, instruction):
         arg = self.stack.pop()
@@ -408,10 +407,17 @@ class Compiler:
                 [where.tojit(self.context), index.tojit(self.context)])
             self.block.add_eval(bound_check_call)
 
-        rvalue = self.context.array_access(
-            data, index.tojit(self.context))
+        rvalue = Rvalue(
+            "byte", "[]",
+            self.context.array_access(data, index.tojit(self.context)))
 
-        self.stack.append(Rvalue("byte", rvalue))
+        tmp = self.temporary(rvalue)
+
+        self.block.add_assignment(
+            tmp.tojit(self.context),
+            rvalue.tojit(self.context))
+
+        self.stack.append(tmp)
 
     def call_function(self, instruction):
         arguments = []
@@ -446,7 +452,7 @@ class Compiler:
                     size = self.context.dereference_field(
                         rvalue.tojit(self.context), self.size_field)
 
-                    self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, size))
+                    self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, "size", size))
 
                     return
 
