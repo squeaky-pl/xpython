@@ -123,8 +123,13 @@ class Local(Rvalue):
         self.function = function
         super().__init__(typ)
 
+    def __repr__(self):
+        return '<Local {}: {} @{:x}>'.format(
+            self.name, type_repr(self.typ), id(self))
+
     def _tojit(self, context):
         return context.local(self.function, xtypeasc(self.typ), self.name)
+
 
 
 class Param(Rvalue):
