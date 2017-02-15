@@ -74,15 +74,19 @@ def type_repr(typ):
 
 
 class Rvalue:
-    def __init__(self, typ, _jit=None):
+    def __init__(self, typ, _jit=None, desc=None):
         self.typ = typ
         self._jit = _jit
+        self.desc = desc
 
     def tojit(self, context):
         if not self._jit:
             self._jit = self._tojit(context)
 
         return self._jit
+
+    def __repr__(self):
+        return '<Rvalue {}: {}>'.format(self.desc or '', type_repr(self.typ))
 
 
 class Constant(Rvalue):
@@ -130,6 +134,15 @@ class Local(Rvalue):
     def _tojit(self, context):
         return context.local(self.function, xtypeasc(self.typ), self.name)
 
+
+class Temporary(Local):
+    def __init__(self, function, typ, idx, src):
+        self.src = src
+        super().__init__(function, typ, '@' + str(idx))
+
+    def __repr__(self):
+        return '<Temporary {}: {} from {}>'.format(
+            self.name, type_repr(self.typ), self.src.name)
 
 
 class Param(Rvalue):
@@ -273,15 +286,21 @@ class Compiler:
             variable.tojit(self.context),
             a.tojit(self.context))
 
-    def load_fast(self, instruction):
-        tmp = self.context.local(
-            self.function, "int", "tmp{}".format(self.temporaries))
+    def temporary(self, src):
+        tmp = Temporary(self.function, src.typ, self.temporaries, src)
         self.temporaries += 1
+        return tmp
+
+    def load_fast(self, instruction):
+        var = self.variables[instruction.arg]
+        # FIXME, not all types need temporary, e.g. buffer
+        tmp = self.temporary(var)
 
         self.block.add_assignment(
-            tmp, self.variables[instruction.arg].tojit(self.context))
+            tmp.tojit(self.context),
+            var.tojit(self.context))
 
-        self.stack.append(Rvalue("int", tmp))
+        self.stack.append(tmp)
 
     def binary_add(self, instruction):
         addition = self.context.binary(
