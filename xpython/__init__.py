@@ -261,7 +261,7 @@ class Compiler:
         self.block = next(self.block_iter)
         self.block_stack = []
 
-    def compile(self):
+    def emit(self):
         for instruction in dis.get_instructions(self.code):
             print('block {}, stack {}'.format(self.block, self.stack))
 
@@ -513,9 +513,32 @@ class Compiler:
         self.block = next_block
         self.block_stack.pop()
 
-def compile_to_context(context, code, ret_type, name, param_types):
+    def compile(self):
+        return CompilerResult(self, self.context.compile())
+
+
+class CompilerResult:
+    def __init__(self, compiler, result):
+        self.compiler = compiler
+        self.result = result
+
+    def code(self, name):
+        return self.result.code(name)
+
+    def cffi(self, name):
+        compiler = self.compiler
+        code = self.result.code(name)
+
+        cparams = ','.join(xtypeasc(p) for p in compiler.param_types)
+        cdef = xtypeasc(compiler.ret_type) + "(*)(" + cparams + ")"
+
+        return ffi.cast(cdef, code)
+
+
+def compile_one(context, code, ret_type, name, param_types):
     compiler = Compiler(context, code, ret_type, name, param_types)
     compiler.setup_common()
     compiler.setup_function()
     compiler.setup_blocks()
-    compiler.compile()
+    compiler.emit()
+    return compiler.compile()
