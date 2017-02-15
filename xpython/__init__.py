@@ -154,6 +154,7 @@ class Compiler:
         self.name = name
         self.param_types = param_types
         self.stack = []
+        self.temporaries = 0
 
     def setup_common(self):
         char_p = self.context.pointer_type("char")
@@ -273,7 +274,14 @@ class Compiler:
             a.tojit(self.context))
 
     def load_fast(self, instruction):
-        self.stack.append(self.variables[instruction.arg])
+        tmp = self.context.local(
+            self.function, "int", "tmp{}".format(self.temporaries))
+        self.temporaries += 1
+
+        self.block.add_assignment(
+            tmp, self.variables[instruction.arg].tojit(self.context))
+
+        self.stack.append(Rvalue("int", tmp))
 
     def binary_add(self, instruction):
         addition = self.context.binary(
@@ -328,6 +336,10 @@ class Compiler:
     def rot_two(self, instruction):
         stack = self.stack
         stack[-1], stack[-2] = stack[-2], stack[-1]
+
+    def rot_three(self, instruction):
+        stack = self.stack
+        stack[-1], stack[-2], stack[-3] = stack[-2], stack[-3], stack[-1]
 
     def store_subscr(self, instruction):
         index = self.stack.pop()
