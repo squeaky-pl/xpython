@@ -66,6 +66,13 @@ block_boundaries = [
 ]
 
 
+def type_repr(typ):
+    if isinstance(typ, tuple):
+        return '({})'.format(', '.join(type_repr(t) for t in typ))
+    else:
+        return typ.__name__
+
+
 class Rvalue:
     def __init__(self, typ, _jit=None):
         self.typ = typ
@@ -82,6 +89,20 @@ class Constant(Rvalue):
     def __init__(self, typ, value):
         self.value = value
         super().__init__(typ)
+
+    @classmethod
+    def frompy(cls, value):
+        if value is None:
+            return None
+        elif isinstance(value, tuple):
+            return cls(tuple(type(i) for i in value), value)
+        elif isinstance(value, DEFAULT_INTEGER_TYPE):
+            return cls(DEFAULT_INTEGER_TYPE, value)
+
+        assert 0
+
+    def __repr__(self):
+        return '<Constant {}: {}>'.format(self.value, type_repr(self.typ))
 
     def _tojit(self, context):
         return context.integer(self.value, xtypeasc(self.typ))
@@ -231,7 +252,7 @@ class Compiler:
             print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_const(self, instruction):
-        self.stack.append(Constant(DEFAULT_INTEGER_TYPE, instruction.argval))
+        self.stack.append(Constant.frompy(instruction.argval))
 
     def load_global(self, instruction):
         self.stack.append(Global(instruction.argval))
@@ -293,6 +314,15 @@ class Compiler:
             a.tojit(self.context),
             b.tojit(self.context))
         self.stack.append(Rvalue(int, comparison))
+
+    def unpack_sequence(self, instruction):
+        arg = self.stack.pop()
+        for item in reversed(arg.value):
+            self.stack.append(Constant.frompy(item))
+
+    def rot_two(self, instruction):
+        stack = self.stack
+        stack[-1], stack[-2] = stack[-2], stack[-1]
 
     def store_subscr(self, instruction):
         index = self.stack.pop()
