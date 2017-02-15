@@ -534,6 +534,32 @@ class CompilerResult:
 
         return ffi.cast(cdef, code)
 
+    def cffi_wrapper(self, name):
+        def make_param(name, typ):
+            if typ == 'buffer':
+                return name + '.ffi'
+
+            return name
+
+        wrapper = "def wrapper_fun(cffi, ".format(name)
+        compiler = self.compiler
+        wrapper += ', '.join(
+            'p{}'.format(i) for i, _ in enumerate(compiler.param_types))
+        wrapper += '):\n'
+        wrapper += '  return cffi('
+        wrapper += ', '.join(
+            make_param('p{}'.format(i), t)
+            for i, t in enumerate(compiler.param_types))
+        wrapper += ')'
+
+        print(wrapper)
+
+        exec(wrapper)
+
+        import functools
+
+        return functools.partial(locals()['wrapper_fun'], self.cffi(name))
+
 
 def compile_one(context, code, ret_type, name, param_types):
     compiler = Compiler(context, code, ret_type, name, param_types)
