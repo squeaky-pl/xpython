@@ -69,6 +69,8 @@ block_boundaries = [
 def type_repr(typ):
     if isinstance(typ, tuple):
         return '({})'.format(', '.join(type_repr(t) for t in typ))
+    elif isinstance(typ, str):
+        return typ
     else:
         return typ.__name__
 
@@ -261,6 +263,8 @@ class Compiler:
 
     def compile(self):
         for instruction in dis.get_instructions(self.code):
+            print('block {}, stack {}'.format(self.block, self.stack))
+
             try:
                 handler = getattr(self, instruction.opname.lower())
             except AttributeError:
@@ -268,7 +272,6 @@ class Compiler:
 
             handler(instruction)
 
-            print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_const(self, instruction):
         self.stack.append(Constant.frompy(instruction.argval))
@@ -293,14 +296,20 @@ class Compiler:
 
     def load_fast(self, instruction):
         var = self.variables[instruction.arg]
+
         # FIXME, not all types need temporary, e.g. buffer
-        tmp = self.temporary(var)
+        if var.typ != 'buffer':
+            tmp = self.temporary(var)
 
-        self.block.add_assignment(
-            tmp.tojit(self.context),
-            var.tojit(self.context))
+            self.block.add_assignment(
+                tmp.tojit(self.context),
+                var.tojit(self.context))
 
-        self.stack.append(tmp)
+            push = tmp
+        else:
+            push = var
+
+        self.stack.append(push)
 
     def binary_add(self, instruction):
         addition = self.context.binary(
