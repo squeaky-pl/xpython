@@ -171,18 +171,20 @@ class Compiler:
         self.param_types = param_types
         self.stack = []
         self.temporaries = 0
-        self.c = CFunctions(context)
 
+        self.ffi = FFI()
+        self.c = CFunctions(context)
+        self.types = Types(context, self.ffi)
 
     def setup_common(self):
-        char_p = self.context.pointer_type("char")
-        self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
-        self.data_field = self.context.field(char_p, "data")
-        self.buffer_type = self.context.struct_type(
-            "buffer", [self.size_field, self.data_field])
-        self.buffer_p_type = self.context.pointer_type(self.buffer_type)
+        # char_p = self.context.pointer_type("char")
+        # self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
+        # self.data_field = self.context.field(char_p, "data")
+        # self.buffer_type = self.context.struct_type(
+        #     "buffer", [self.size_field, self.data_field])
+        # self.buffer_p_type = self.context.pointer_type(self.buffer_type)
         # TODO FIXME to jit should depend on compiler?
-        self.context.buffer_p_type = self.buffer_p_type
+        self.context.buffer_p_type = self.types.buffer.ctype
 
         if BOUND_CHECKS:
             abort = self.context.imported_function("void", "abort")
@@ -393,7 +395,7 @@ class Compiler:
         assert what.typ == 'byte', "what must be byte"
 
         data = self.context.dereference_field(
-            where.tojit(self.context), self.data_field)
+            where.tojit(self.context), self.types.buffer.data_field)
 
         if BOUND_CHECKS:
             bound_check_call = self.context.call(
@@ -414,7 +416,7 @@ class Compiler:
         assert where.typ == 'buffer', "where must be buffer"
 
         data = self.context.dereference_field(
-            where.tojit(self.context), self.data_field)
+            where.tojit(self.context), self.types.buffer.data_field)
 
         if BOUND_CHECKS:
             bound_check_call = self.context.call(
@@ -465,7 +467,8 @@ class Compiler:
 
                 if isinstance(rvalue, Rvalue) and rvalue.typ == 'buffer':
                     size = self.context.dereference_field(
-                        rvalue.tojit(self.context), self.size_field)
+                        rvalue.tojit(self.context),
+                        self.types.buffer.size_field)
 
                     self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, "size", size))
 
