@@ -103,7 +103,7 @@ class Constant(Rvalue):
         elif isinstance(value, tuple):
             return cls(tuple(type(i) for i in value), value)
         elif isinstance(value, int):
-            return cls(compiler.types.get_type('default'), value)
+            return cls(compiler.types.default, value)
 
         assert 0
 
@@ -319,19 +319,19 @@ class Compiler:
 
     def binary_add(self, instruction):
         addition = self.context.binary(
-            '+', self.types.get_type('default').ctype,
+            '+', self.types.default.ctype,
             self.stack.pop().tojit(self.context),
             self.stack.pop().tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '+', addition))
+        self.stack.append(Rvalue(self.types.default, '+', addition))
 
     def binary_subtract(self, instruction):
         b = self.stack.pop()
         a = self.stack.pop()
         substraction = self.context.binary(
-            '-', self.types.get_type('default').ctype,
+            '-', self.types.default.ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.get_type('default'), '-', substraction))
+        self.stack.append(Rvalue(self.types.default, '-', substraction))
 
     def binary_floor_divide(self, instruction):
         # FIXME: this only works for positive numbers!
@@ -339,19 +339,19 @@ class Compiler:
         b = self.stack.pop()
         a = self.stack.pop()
         division = self.context.binary(
-            '/', self.types.get_type('default').ctype,
+            '/', self.types.default.ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.get_type('default'), '//', division))
+        self.stack.append(Rvalue(self.types.default, '//', division))
 
     def inplace_add(self, instruction):
         b = self.stack.pop()
         a = self.stack.pop()
         addition = self.context.binary(
-            '+', self.types.get_type('default').ctype,
+            '+', self.types.default.ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.get_type('default'), '+', addition))
+        self.stack.append(Rvalue(self.types.default, '+', addition))
 
     def compare_op(self, instruction):
         b = self.stack.pop()
@@ -415,7 +415,7 @@ class Compiler:
             self.block.add_eval(bound_check_call)
 
         rvalue = Rvalue(
-            self.types.get_type('byte'), "[]",
+            self.types.byte, "[]",
             self.context.array_access(data, index.tojit(self.context)))
 
         tmp = self.temporary(rvalue)
@@ -446,7 +446,8 @@ class Compiler:
 
                 if isinstance(rvalue, Constant):
                     if 0 <= rvalue.value <= 0xff:
-                        self.stack.append(Constant(self.types.get_type('byte'), rvalue.value))
+                        self.stack.append(
+                            Constant(self.types.byte, rvalue.value))
                     else:
                         assert 0, "Constant out of bounds for byte"
 
@@ -460,7 +461,7 @@ class Compiler:
                         rvalue.tojit(self.context),
                         self.types.buffer.size_field)
 
-                    self.stack.append(Rvalue(self.types.get_type('default'), "size", size))
+                    self.stack.append(Rvalue(self.types.default, "size", size))
 
                     return
 

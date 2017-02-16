@@ -52,6 +52,14 @@ class Types:
     def buffer(self):
         return self._get_type(Buffer)
 
+    @property
+    def default(self):
+        return self._get_type(Default)
+
+    @property
+    def byte(self):
+        return self._get_type(Byte)
+
     def get_type(self, name):
         str_to_typ = {
             'void': Void,
