@@ -1,4 +1,5 @@
 from xpython.typing import struct
+from collections import OrderedDict
 
 
 DEFAULT_INTEGER_CTYPE = 'int'
@@ -42,12 +43,13 @@ class Byte(Type):
 
 class Struct(Type):
     def build(self):
-        self.cfields = [
-            self.context.field(typ.ctype, name)
-            for typ, name in self.fields]
+        self.cfields = OrderedDict(
+            (name, self.context.field(typ.ctype, name))
+            for typ, name in self.fields)
 
-        self.ctype = self.context.struct_type(self.name, self.cfields)
-        self.cptrtype = self.context.pointer_type(self.ctype)
+        self._ctype = self.context.struct_type(
+            self.name, list(self.cfields.values()))
+        self.ctype = self.context.pointer_type(self._ctype)
 
         cffi_template = "typedef struct {\n"
         for typ, name in self.fields:
@@ -55,6 +57,17 @@ class Struct(Type):
         cffi_template += '} ' + self.name + ';'
 
         self.ffi.cdef(cffi_template)
+
+    def store_attr(self, compiler, instruction):
+        where = compiler.stack.pop()
+        what = compiler.stack.pop()
+        cfield = self.cfields[instruction.argval]
+        context = compiler.context
+
+        deref = compiler.context.dereference_field(
+            where.tojit(context), cfield)
+
+        compiler.block.add_assignment(deref, what.tojit(context))
 
     @property
     def cname(self):

@@ -308,7 +308,7 @@ class Compiler:
     def unpack_sequence(self, instruction):
         arg = self.stack.pop()
         for item in reversed(arg.value):
-            self.stack.append(Constant.frompy(item))
+            self.stack.append(Constant.frompy(self, item))
 
     def rot_two(self, instruction):
         stack = self.stack
@@ -368,6 +368,9 @@ class Compiler:
             rvalue.tojit(self.context))
 
         self.stack.append(tmp)
+
+    def store_attr(self, instruction):
+        self.stack[-1].typ.store_attr(self, instruction)
 
     def call_function(self, instruction):
         arguments = []
