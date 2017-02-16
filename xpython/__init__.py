@@ -171,6 +171,8 @@ class Compiler:
         self.param_types = param_types
         self.stack = []
         self.temporaries = 0
+        self.c = CFunctions(context)
+
 
     def setup_common(self):
         char_p = self.context.pointer_type("char")
@@ -204,6 +206,19 @@ class Compiler:
             trap_block.end_with_void_return()
 
             ret_block.end_with_void_return()
+
+    def get_print(self, params):
+        formats = {'int': b'%d'}
+
+        param_types = [p.typ for p in params]
+#        name = 'print_' + '_'.join(p.__name__ for p in param_types)
+        cparam_types = [xtypeasc(p) for p in param_types]
+        formatstr = self.context.string_literal(
+            b' '.join(formats[t] for t in cparam_types) + b'\n')
+
+        return self.c.printf(
+            formatstr, *[p.tojit(self.context) for p in params])
+
 
     def setup_function(self):
         code = self.code
@@ -422,7 +437,7 @@ class Compiler:
     def call_function(self, instruction):
         arguments = []
         for _ in range(instruction.arg):
-            arguments.append(self.stack.pop())
+            arguments.insert(0, self.stack.pop())
         function = self.stack.pop()
 
         if isinstance(function, Global):
@@ -455,6 +470,16 @@ class Compiler:
                     self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, "size", size))
 
                     return
+
+            if function.name == 'print':
+                call = self.get_print(arguments)
+
+                self.block.add_eval(call)
+
+                self.stack.append(None)
+
+                return
+
 
         assert 0, "Don't know what to do with {}({})".format(
             function, arguments)
@@ -489,8 +514,6 @@ class Compiler:
             next_block = next(self.block_iter)
             self.block.end_with_jump(next_block)
             self.block = next_block
-        else:
-            assert 0, "Dont know how to handle {}".format(top)
 
     def jump_absolute(self, instruction):
         self.block.end_with_jump(self.block_map[instruction.arg])
