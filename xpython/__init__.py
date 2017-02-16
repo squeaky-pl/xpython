@@ -120,14 +120,11 @@ class Compiler:
         self.c = CFunctions(context)
 
     def setup_common(self):
-        # TODO FIXME to jit should depend on compiler?
-        self.context.buffer_p_type = self.types.buffer.ctype
-
         if BOUND_CHECKS:
             abort = self.context.imported_function("void", "abort")
 
             # bound check code
-            buffer_param = self.context.param(self.buffer_p_type, "buffer")
+            buffer_param = self.context.param(self.types.buffer.ctype, "buffer")
             index_param = self.context.param(self.type.default.ctype, "index")
             self.bound_check = self.context.internal_function(
                  "void", "bound_check", [buffer_param, index_param])
