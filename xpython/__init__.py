@@ -3,56 +3,11 @@ import gccjit
 import dis
 from cffi import FFI
 
-
-xtype_to_c = {
-    int: "int",
-    "byte": "char",
-    "unsigned": "unsigned long",
-    "signed": "signed long",
-    "void": "void"
-}
+from xpython.c import CFunctions
+from xpython.types import Types, Default, Byte, Buffer, Void
 
 
-DEFAULT_INTEGER_TYPE = int
-DEFAULT_INTEGER_CTYPE = xtype_to_c[DEFAULT_INTEGER_TYPE]
-BOUND_CHECKS = True
-
-ffi = FFI()
-ffi.cdef("""
-typedef struct {{
-    {ctype} size;
-    char* data;
-}} buffer;
-
-typedef struct {{
-    {ctype} size;
-    const char* data;
-}} ibuffer;
-""".format(ctype=DEFAULT_INTEGER_CTYPE))
-
-
-def xtypeasc(typ):
-    return xtype_to_c[typ]
-
-
-class CffiBuffer:
-    def __init__(self, data):
-        self._data = ffi.new("char[]", data)
-        self._ffi = ffi.new("buffer*")
-        self._ffi.size = self.size
-        self._ffi.data = self._data
-
-    @property
-    def data(self):
-        return ffi.unpack(self._data, self.size)
-
-    @property
-    def size(self):
-        return len(self._data) - 1
-
-    @property
-    def ffi(self):
-        return self._ffi
+BOUND_CHECKS = False
 
 
 def get_fun_code(source):
@@ -64,15 +19,6 @@ block_boundaries = [
     'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE', 'SETUP_LOOP', 'JUMP_ABSOLUTE',
     'BREAK_LOOP'
 ]
-
-
-def type_repr(typ):
-    if isinstance(typ, tuple):
-        return '({})'.format(', '.join(type_repr(t) for t in typ))
-    elif isinstance(typ, str):
-        return typ
-    else:
-        return typ.__name__
 
 
 class Rvalue:
@@ -161,15 +107,17 @@ class Compiler:
     def __init__(self, context, code, ret_type, name, param_types):
         self.context = context
         self.code = code
-        self.ret_type = ret_type
         self.name = name
-        self.param_types = param_types
         self.stack = []
         self.temporaries = 0
 
         self.ffi = FFI()
-        self.c = CFunctions(context)
         self.types = Types(context, self.ffi)
+
+        self.ret_type = self.types.get_type(ret_type)
+        self.param_types = [self.types.get_type(p) for p in param_types]
+
+        self.c = CFunctions(context)
 
     def setup_common(self):
         # TODO FIXME to jit should depend on compiler?
@@ -180,7 +128,7 @@ class Compiler:
 
             # bound check code
             buffer_param = self.context.param(self.buffer_p_type, "buffer")
-            index_param = self.context.param(DEFAULT_INTEGER_CTYPE, "index")
+            index_param = self.context.param(self.type.default.ctype, "index")
             self.bound_check = self.context.internal_function(
                  "void", "bound_check", [buffer_param, index_param])
 
@@ -203,7 +151,7 @@ class Compiler:
 
         param_types = [p.typ for p in params]
 #        name = 'print_' + '_'.join(p.__name__ for p in param_types)
-        cparam_types = [xtypeasc(p) for p in param_types]
+        cparam_types = [t.ctype for t in param_types]
         formatstr = self.context.string_literal(
             b' '.join(formats[t] for t in cparam_types) + b'\n')
 
@@ -218,13 +166,11 @@ class Compiler:
         # setup parameters
         for i in range(code.co_argcount):
             self.variables.append(
-                Param(
-                    self.types.get_type(self.param_types[i]),
-                    code.co_varnames[i]))
+                Param(self.param_types[i], code.co_varnames[i]))
             params = [v.tojit(self.context) for v in self.variables]
 
         self.function = self.context.exported_function(
-            self.types.get_type(self.ret_type).ctype, self.name, params)
+            self.ret_type.ctype, self.name, params)
 
         # setup locals
         for i in range(code.co_argcount, code.co_nlocals):
@@ -480,7 +426,7 @@ class Compiler:
 
     def return_value(self, instruction):
         retval = self.stack.pop()
-        if self.ret_type != 'void':
+        if not isinstance(self.ret_type, Void):
             self.block.end_with_return(retval.tojit(self.context))
         else:
             self.block.end_with_void_return()
@@ -534,6 +480,27 @@ class Compiler:
         return CompilerResult(self, self.context.compile())
 
 
+class CffiBuffer:
+    def __init__(self, ffi, data):
+        self._data = ffi.new("char[]", data)
+        self._cffi = ffi.new("buffer*")
+        self._cffi.size = self.size
+        self._cffi.data = self._data
+        self.ffi = ffi
+
+    @property
+    def data(self):
+        return self.ffi.unpack(self._data, self.size)
+
+    @property
+    def size(self):
+        return len(self._data) - 1
+
+    @property
+    def cffi(self):
+        return self._cffi
+
+
 class CompilerResult:
     def __init__(self, compiler, result):
         self.compiler = compiler
@@ -546,15 +513,15 @@ class CompilerResult:
         compiler = self.compiler
         code = self.result.code(name)
 
-        cparams = ','.join(xtypeasc(p) for p in compiler.param_types)
-        cdef = xtypeasc(compiler.ret_type) + "(*)(" + cparams + ")"
+        cparams = ','.join(p.cname for p in compiler.param_types)
+        cdef = compiler.ret_type.cname + "(*)(" + cparams + ")"
 
-        return ffi.cast(cdef, code)
+        return compiler.ffi.cast(cdef, code)
 
     def cffi_wrapper(self, name):
         def make_param(name, typ):
-            if typ == 'buffer':
-                return name + '.ffi'
+            if isinstance(typ, Buffer):
+                return name + '.cffi'
 
             return name
 

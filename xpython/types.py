@@ -14,15 +14,27 @@ class Void(Type):
     def build(self):
         self.ctype = self.context.type("void")
 
+    @property
+    def cname(self):
+        return 'void'
+
 
 class Default(Type):
     def build(self):
         self.ctype = self.context.type(DEFAULT_INTEGER_CTYPE)
 
+    @property
+    def cname(self):
+        return DEFAULT_INTEGER_CTYPE
+
 
 class Byte(Type):
     def build(self):
         self.ctype = self.context.type('char')
+
+    @property
+    def cname(self):
+        return 'char'
 
 
 class Buffer(Type):
@@ -40,6 +52,10 @@ class Buffer(Type):
                 char* data;
             }} buffer;
         """.format(size_type=DEFAULT_INTEGER_CTYPE))
+
+    @property
+    def cname(self):
+        return 'buffer*'
 
 
 class Types:
