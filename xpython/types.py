@@ -1,3 +1,6 @@
+from xpython.typing import struct
+
+
 DEFAULT_INTEGER_CTYPE = 'int'
 
 
@@ -35,6 +38,30 @@ class Byte(Type):
     @property
     def cname(self):
         return 'char'
+
+
+class Struct(Type):
+    def build(self):
+        self.cfields = [
+            self.context.field(typ.ctype, name)
+            for typ, name in self.fields]
+
+        self.ctype = self.context.struct_type(self.name, self.cfields)
+        self.cptrtype = self.context.pointer_type(self.ctype)
+
+        cffi_template = "typedef struct {\n"
+        for typ, name in self.fields:
+            cffi_template += "    {} {};\n".format(typ.cname, name)
+        cffi_template += '} ' + self.name + ';'
+
+        self.ffi.cdef(cffi_template)
+
+    @property
+    def cname(self):
+        return self.name + '*'
+
+    def __str__(self):
+        return self.name
 
 
 class Buffer(Type):
@@ -76,7 +103,7 @@ class Types:
     def byte(self):
         return self._get_type(Byte)
 
-    def get_type(self, name):
+    def get_type(self, typid):
         str_to_typ = {
             'void': Void,
             int: Default,
@@ -85,7 +112,14 @@ class Types:
             'buffer': Buffer
         }
 
-        return self._get_type(str_to_typ[name])
+        if isinstance(typid, struct):
+            fields = [(self.get_type(t), name) for t, name in typid.fields]
+            typ = type(
+                typid.name, (Struct,), {"name": typid.name, "fields": fields})
+
+            return self._get_type(typ)
+
+        return self._get_type(str_to_typ[typid])
 
     def _get_type(self, typ):
         if typ in self.cache:
