@@ -35,7 +35,7 @@ def xtypeasc(typ):
     return xtype_to_c[typ]
 
 
-class Buffer:
+class CffiBuffer:
     def __init__(self, data):
         self._data = ffi.new("char[]", data)
         self._ffi = ffi.new("buffer*")
@@ -88,7 +88,7 @@ class Rvalue:
         return self._jit
 
     def __repr__(self):
-        return '<Rvalue {}: {}>'.format(self.desc or '', type_repr(self.typ))
+        return '<Rvalue {}: {}>'.format(self.desc or '', self.typ)
 
 
 class Constant(Rvalue):
@@ -97,21 +97,21 @@ class Constant(Rvalue):
         super().__init__(typ)
 
     @classmethod
-    def frompy(cls, value):
+    def frompy(cls, compiler, value):
         if value is None:
             return None
         elif isinstance(value, tuple):
             return cls(tuple(type(i) for i in value), value)
-        elif isinstance(value, DEFAULT_INTEGER_TYPE):
-            return cls(DEFAULT_INTEGER_TYPE, value)
+        elif isinstance(value, int):
+            return cls(compiler.types.get_type('default'), value)
 
         assert 0
 
     def __repr__(self):
-        return '<Constant {}: {}>'.format(self.value, type_repr(self.typ))
+        return '<Constant {}: {}>'.format(self.value, self.typ)
 
     def _tojit(self, context):
-        return context.integer(self.value, xtypeasc(self.typ))
+        return context.integer(self.value, self.typ.ctype)
 
 
 class Global:
@@ -133,10 +133,10 @@ class Local(Rvalue):
 
     def __repr__(self):
         return '<Local {}: {} @{:x}>'.format(
-            self.desc, type_repr(self.typ), id(self))
+            self.desc, self.typ, id(self))
 
     def _tojit(self, context):
-        return context.local(self.function, xtypeasc(self.typ), self.desc)
+        return context.local(self.function, self.typ.ctype, self.desc)
 
 
 class Temporary(Local):
@@ -146,7 +146,7 @@ class Temporary(Local):
 
     def __repr__(self):
         return '<Temporary {}: {} from {}>'.format(
-            self.desc, type_repr(self.typ), self.src.desc)
+            self.desc, self.typ, self.src.desc)
 
 
 class Param(Rvalue):
@@ -154,12 +154,7 @@ class Param(Rvalue):
         super().__init__(typ, name)
 
     def _tojit(self, context):
-        if self.typ == 'buffer':
-            ctyp = context.buffer_p_type
-        else:
-            ctyp = xtypeasc(self.typ)
-
-        return context.param(ctyp, self.desc)
+        return context.param(self.typ.ctype, self.desc)
 
 
 class Compiler:
@@ -215,7 +210,6 @@ class Compiler:
         return self.c.printf(
             formatstr, *[p.tojit(self.context) for p in params])
 
-
     def setup_function(self):
         code = self.code
         self.variables = []
@@ -224,11 +218,13 @@ class Compiler:
         # setup parameters
         for i in range(code.co_argcount):
             self.variables.append(
-                Param(self.param_types[i], code.co_varnames[i]))
+                Param(
+                    self.types.get_type(self.param_types[i]),
+                    code.co_varnames[i]))
             params = [v.tojit(self.context) for v in self.variables]
 
         self.function = self.context.exported_function(
-            xtypeasc(self.ret_type), self.name, params)
+            self.types.get_type(self.ret_type).ctype, self.name, params)
 
         # setup locals
         for i in range(code.co_argcount, code.co_nlocals):
@@ -284,7 +280,7 @@ class Compiler:
             handler(instruction)
 
     def load_const(self, instruction):
-        self.stack.append(Constant.frompy(instruction.argval))
+        self.stack.append(Constant.frompy(self, instruction.argval))
 
     def load_global(self, instruction):
         self.stack.append(Global(instruction.argval))
@@ -308,7 +304,7 @@ class Compiler:
         var = self.variables[instruction.arg]
 
         # FIXME, not all types need temporary, e.g. buffer
-        if var.typ != 'buffer':
+        if not isinstance(var.typ, Buffer):
             tmp = self.temporary(var)
 
             self.block.add_assignment(
@@ -323,7 +319,7 @@ class Compiler:
 
     def binary_add(self, instruction):
         addition = self.context.binary(
-            '+', xtypeasc(DEFAULT_INTEGER_TYPE),
+            '+', self.types.get_type('default').ctype,
             self.stack.pop().tojit(self.context),
             self.stack.pop().tojit(self.context))
         self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '+', addition))
@@ -332,10 +328,10 @@ class Compiler:
         b = self.stack.pop()
         a = self.stack.pop()
         substraction = self.context.binary(
-            '-', xtypeasc(DEFAULT_INTEGER_TYPE),
+            '-', self.types.get_type('default').ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '-', substraction))
+        self.stack.append(Rvalue(self.types.get_type('default'), '-', substraction))
 
     def binary_floor_divide(self, instruction):
         # FIXME: this only works for positive numbers!
@@ -343,19 +339,19 @@ class Compiler:
         b = self.stack.pop()
         a = self.stack.pop()
         division = self.context.binary(
-            '/', xtypeasc(DEFAULT_INTEGER_TYPE),
+            '/', self.types.get_type('default').ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '//', division))
+        self.stack.append(Rvalue(self.types.get_type('default'), '//', division))
 
     def inplace_add(self, instruction):
         b = self.stack.pop()
         a = self.stack.pop()
         addition = self.context.binary(
-            '+', xtypeasc(DEFAULT_INTEGER_TYPE),
+            '+', self.types.get_type('default').ctype,
             a.tojit(self.context),
             b.tojit(self.context))
-        self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, '+', addition))
+        self.stack.append(Rvalue(self.types.get_type('default'), '+', addition))
 
     def compare_op(self, instruction):
         b = self.stack.pop()
@@ -384,9 +380,9 @@ class Compiler:
         where = self.stack.pop()
         what = self.stack.pop()
 
-        assert index.typ in (int, "unsigned"), "index must be integer"
-        assert where.typ == 'buffer', "where must be buffer"
-        assert what.typ == 'byte', "what must be byte"
+        assert isinstance(index.typ, Default), "index must be integer"
+        assert isinstance(where.typ, Buffer), "where must be buffer"
+        assert isinstance(what.typ, Byte), "what must be byte"
 
         data = self.context.dereference_field(
             where.tojit(self.context), self.types.buffer.data_field)
@@ -406,8 +402,8 @@ class Compiler:
         index = self.stack.pop()
         where = self.stack.pop()
 
-        assert index.typ in (int, "unsigned"), "index must be integer"
-        assert where.typ == 'buffer', "where must be buffer"
+        assert isinstance(index.typ, Default), "index must be integer"
+        assert isinstance(where.typ, Buffer), "where must be buffer"
 
         data = self.context.dereference_field(
             where.tojit(self.context), self.types.buffer.data_field)
@@ -419,7 +415,7 @@ class Compiler:
             self.block.add_eval(bound_check_call)
 
         rvalue = Rvalue(
-            "byte", "[]",
+            self.types.get_type('byte'), "[]",
             self.context.array_access(data, index.tojit(self.context)))
 
         tmp = self.temporary(rvalue)
@@ -450,7 +446,7 @@ class Compiler:
 
                 if isinstance(rvalue, Constant):
                     if 0 <= rvalue.value <= 0xff:
-                        self.stack.append(Constant('byte', rvalue.value))
+                        self.stack.append(Constant(self.types.get_type('byte'), rvalue.value))
                     else:
                         assert 0, "Constant out of bounds for byte"
 
@@ -459,12 +455,12 @@ class Compiler:
             if function.name == 'len' and instruction.arg == 1:
                 rvalue = arguments[0]
 
-                if isinstance(rvalue, Rvalue) and rvalue.typ == 'buffer':
+                if isinstance(rvalue, Rvalue) and isinstance(rvalue.typ, Buffer):
                     size = self.context.dereference_field(
                         rvalue.tojit(self.context),
                         self.types.buffer.size_field)
 
-                    self.stack.append(Rvalue(DEFAULT_INTEGER_TYPE, "size", size))
+                    self.stack.append(Rvalue(self.types.get_type('default'), "size", size))
 
                     return
 

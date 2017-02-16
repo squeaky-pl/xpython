@@ -6,6 +6,9 @@ class Type:
         self.context = context
         self.ffi = ffi
 
+    def __str__(self):
+        return type(self).__name__
+
 
 class Void(Type):
     def build(self):
