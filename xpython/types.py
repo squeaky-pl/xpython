@@ -1,22 +1,25 @@
-xtype_to_c = {
-    int: "int",
-    "byte": "char",
-    "unsigned": "unsigned long",
-    "signed": "signed long",
-    "void": "void",
-
-    "buffer": "buffer*"
-}
-
-
-DEFAULT_INTEGER_TYPE = int
-DEFAULT_INTEGER_CTYPE = xtype_to_c[DEFAULT_INTEGER_TYPE]
+DEFAULT_INTEGER_CTYPE = 'int'
 
 
 class Type:
     def __init__(self, context, ffi):
         self.context = context
         self.ffi = ffi
+
+
+class Void(Type):
+    def build(self):
+        self.ctype = self.context.type("void")
+
+
+class Default(Type):
+    def build(self):
+        self.ctype = self.context.type(DEFAULT_INTEGER_CTYPE)
+
+
+class Byte(Type):
+    def build(self):
+        self.ctype = self.context.type('char')
 
 
 class Buffer(Type):
@@ -44,14 +47,25 @@ class Types:
 
     @property
     def buffer(self):
-        return self.get_type(
-            'buffer', Buffer(self.context, self.ffi))
+        return self._get_type(Buffer)
 
-    def get_type(self, name, typ):
-        if name in self.cache:
-            return self.cache[name]
+    def get_type(self, name):
+        str_to_typ = {
+            'void': Void,
+            int: Default,
+            'default': Default,
+            'byte': Byte,
+            'buffer': Buffer
+        }
 
-        typ.build()
-        self.cache[name] = typ
+        return self._get_type(str_to_typ[name])
 
-        return self.cache[name]
+    def _get_type(self, typ):
+        if typ in self.cache:
+            return self.cache[typ]
+
+        instance = typ(self.context, self.ffi)
+        instance.build()
+        self.cache[typ] = instance
+
+        return self.cache[typ]

@@ -177,12 +177,6 @@ class Compiler:
         self.types = Types(context, self.ffi)
 
     def setup_common(self):
-        # char_p = self.context.pointer_type("char")
-        # self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
-        # self.data_field = self.context.field(char_p, "data")
-        # self.buffer_type = self.context.struct_type(
-        #     "buffer", [self.size_field, self.data_field])
-        # self.buffer_p_type = self.context.pointer_type(self.buffer_type)
         # TODO FIXME to jit should depend on compiler?
         self.context.buffer_p_type = self.types.buffer.ctype
 
