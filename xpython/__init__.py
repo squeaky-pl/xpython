@@ -141,8 +141,7 @@ class Compiler:
     def load_fast(self, instruction):
         var = self.variables[instruction.arg]
 
-        # FIXME, not all types need temporary, e.g. buffer
-        if not isinstance(var.typ, Buffer):
+        if var.typ.needs_temporary:
             tmp = self.temporary(var)
 
             self.block.add_assignment(
@@ -156,40 +155,28 @@ class Compiler:
         self.stack.append(push)
 
     def binary_add(self, instruction):
-        addition = self.context.binary(
-            '+', self.types.default.ctype,
-            self.stack.pop().tojit(self.context),
-            self.stack.pop().tojit(self.context))
-        self.stack.append(Rvalue(self.types.default, '+', addition))
-
-    def binary_subtract(self, instruction):
-        b = self.stack.pop()
-        a = self.stack.pop()
-        substraction = self.context.binary(
-            '-', self.types.default.ctype,
-            a.tojit(self.context),
-            b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.default, '-', substraction))
-
-    def binary_floor_divide(self, instruction):
-        # FIXME: this only works for positive numbers!
-        # http://stackoverflow.com/questions/828092/python-style-integer-division-modulus-in-c
-        b = self.stack.pop()
-        a = self.stack.pop()
-        division = self.context.binary(
-            '/', self.types.default.ctype,
-            a.tojit(self.context),
-            b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.default, '//', division))
+        self.stack[-1].typ.binary_add(self)
 
     def inplace_add(self, instruction):
-        b = self.stack.pop()
-        a = self.stack.pop()
-        addition = self.context.binary(
-            '+', self.types.default.ctype,
-            a.tojit(self.context),
-            b.tojit(self.context))
-        self.stack.append(Rvalue(self.types.default, '+', addition))
+        self.stack[-1].typ.binary_add(self)
+
+    def binary_subtract(self, instruction):
+        self.stack[-1].typ.inplace_subtract(self)
+
+    def inplace_subtract(self, instruction):
+        self.stack[-1].typ.binary_subtract(self)
+
+    def binary_multiply(self, instruction):
+        self.stack[-1].typ.binary_multiply(self)
+
+    def inplace_multiply(self, instruction):
+        self.stack[-1].typ.inplace_multiply(self)
+
+    def binary_floor_divide(self, instruction):
+        self.stack[-1].typ.binary_floor_divide(self)
+
+    def inplace_floor_divide(self, instruction):
+        self.stack[-1].typ.inplace_floor_divide(self)
 
     def compare_op(self, instruction):
         b = self.stack.pop()

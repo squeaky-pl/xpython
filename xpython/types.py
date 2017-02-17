@@ -28,22 +28,50 @@ class ByCopy:
     needs_temporary = True
 
 
-class Default(Type, ByCopy):
+# abstract
+class Integer(Type, ByCopy):
     def build(self):
-        self.ctype = self.context.type(DEFAULT_INTEGER_CTYPE)
+        self.ctype = self.context.type(self.cname)
 
-    @property
-    def cname(self):
-        return DEFAULT_INTEGER_CTYPE
+    def binary(self, compiler, op):
+        b = compiler.stack.pop()
+        a = compiler.stack.pop()
+        context = compiler.context
+
+        result = context.binary(
+            op, self.ctype, a.tojit(context), b.tojit(context))
+
+        compiler.stack.append(Rvalue(self, op, result))
+
+    def binary_add(self, compiler):
+        self.binary(compiler, '+')
+
+    inplace_add = binary_add
+
+    def binary_subtract(self, compiler):
+        self.binary(compiler, '-')
+
+    inplace_subtract = binary_subtract
+
+    def binary_multiply(self, compiler):
+        self.binary(compiler, '*')
+
+    inplace_multiply = binary_multiply
+
+    def binary_floor_divide(self, compiler):
+        # FIXME: this only works for positive numbers!
+        # http://stackoverflow.com/questions/828092/python-style-integer-division-modulus-in-c
+        self.binary(compiler, '/')
+
+    inplace_floor_divide = binary_floor_divide
+
+
+class Default(Integer):
+    cname = DEFAULT_INTEGER_CTYPE
 
 
 class Byte(Type, ByCopy):
-    def build(self):
-        self.ctype = self.context.type('char')
-
-    @property
-    def cname(self):
-        return 'char'
+    cname = 'char'
 
 
 class ByRef:
