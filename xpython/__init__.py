@@ -38,30 +38,6 @@ class Compiler:
 
         self.c = CFunctions(context)
 
-    def setup_common(self):
-        if BOUND_CHECKS:
-            abort = self.context.imported_function("void", "abort")
-
-            # bound check code
-            buffer_param = self.context.param(self.types.buffer.ctype, "buffer")
-            index_param = self.context.param(self.type.default.ctype, "index")
-            self.bound_check = self.context.internal_function(
-                 "void", "bound_check", [buffer_param, index_param])
-
-            cmp_block = self.context.block(self.bound_check)
-            trap_block = self.context.block(self.bound_check)
-            ret_block = self.context.block(self.bound_check)
-
-            size = self.context.dereference_field(buffer_param, self.size_field)
-            comparison = self.context.comparison('<', index_param, size)
-            cmp_block.end_with_conditonal(comparison, ret_block, trap_block)
-
-            trap_call = self.context.call(abort)
-            trap_block.add_eval(trap_call)
-            trap_block.end_with_void_return()
-
-            ret_block.end_with_void_return()
-
     def get_print(self, params):
         formats = {'int': b'%d'}
 
@@ -261,32 +237,7 @@ class Compiler:
         self.block.add_assignment(lvalue, what.tojit(self.context))
 
     def binary_subscr(self, instruction):
-        index = self.stack.pop()
-        where = self.stack.pop()
-
-        assert isinstance(index.typ, Default), "index must be integer"
-        assert isinstance(where.typ, Buffer), "where must be buffer"
-
-        data = self.context.dereference_field(
-            where.tojit(self.context), self.types.buffer.data_field)
-
-        if BOUND_CHECKS:
-            bound_check_call = self.context.call(
-                self.bound_check,
-                [where.tojit(self.context), index.tojit(self.context)])
-            self.block.add_eval(bound_check_call)
-
-        rvalue = Rvalue(
-            self.types.byte, "[]",
-            self.context.array_access(data, index.tojit(self.context)))
-
-        tmp = self.temporary(rvalue)
-
-        self.block.add_assignment(
-            tmp.tojit(self.context),
-            rvalue.tojit(self.context))
-
-        self.stack.append(tmp)
+        self.stack[-2].typ.binary_subscr(self, instruction)
 
     def store_attr(self, instruction):
         self.stack[-1].typ.store_attr(self, instruction)
@@ -469,7 +420,6 @@ class CompilerResult:
 
 def compile_one(context, code, ret_type, name, param_types):
     compiler = Compiler(context, code, ret_type, name, param_types)
-    compiler.setup_common()
     compiler.setup_function()
     compiler.setup_blocks()
     compiler.emit()

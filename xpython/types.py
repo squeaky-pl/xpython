@@ -46,6 +46,20 @@ class Byte(Type, ByCopy):
         return 'char'
 
 
+class ByRef:
+    needs_temporary = False
+
+
+class RawMem(Type, ByRef):
+    def build(self):
+        char = self.context.type('char')
+        self.ctype = self.context.pointer_type(char)
+
+    @property
+    def cname(self):
+        return 'char*'
+
+
 class Field:
     def __init__(self, name, typ, cfield):
         self.name = name
@@ -83,13 +97,11 @@ class Struct(Type):
 
         compiler.block.add_assignment(deref, what.tojit(context))
 
-    def load_attr(self, compiler, instruction):
-        where = compiler.stack.pop()
-        name = instruction.argval
+    def load_attribute(self, compiler, where, name):
         cfield = self.fields[name].cfield
         context = compiler.context
 
-        deref = compiler.context.dereference_field(
+        deref = context.dereference_field(
             where.tojit(context), cfield)
 
         rvalue = Rvalue(self.fields[name].typ, '.' + name, deref)
@@ -101,9 +113,15 @@ class Struct(Type):
                 tmp.tojit(context),
                 rvalue.tojit(context))
 
-            compiler.stack.append(tmp)
-        else:
-            compiler.stack.append(rvalue)
+            return tmp
+
+        return rvalue
+
+    def load_attr(self, compiler, instruction):
+        where = compiler.stack.pop()
+        name = instruction.argval
+
+        compiler.stack.append(self.load_attribute(compiler, where, name))
 
     @property
     def cname(self):
@@ -113,25 +131,82 @@ class Struct(Type):
         return self.name
 
 
-class Buffer(Type):
+class Buffer(Struct):
+    name = 'buffer'
+    fields = [(Default, 'size'), (RawMem, 'data')]
+    # def build(self):
+    #     char_p = self.context.pointer_type("char")
+    #     self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
+    #     self.data_field = self.context.field(char_p, "data")
+    #     self.buffer_type = self.context.struct_type(
+    #         "buffer", [self.size_field, self.data_field])
+    #     self.ctype = self.context.pointer_type(self.buffer_type)
+    #
+    #     self.ffi.cdef("""
+    #         typedef struct {{
+    #             {size_type} size;
+    #             char* data;
+    #         }} buffer;
+    #     """.format(size_type=DEFAULT_INTEGER_CTYPE))
+    #
+    # @property
+    # def cname(self):
+    #     return 'buffer*'
+
     def build(self):
-        char_p = self.context.pointer_type("char")
-        self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
-        self.data_field = self.context.field(char_p, "data")
-        self.buffer_type = self.context.struct_type(
-            "buffer", [self.size_field, self.data_field])
-        self.ctype = self.context.pointer_type(self.buffer_type)
+        super().build()
 
-        self.ffi.cdef("""
-            typedef struct {{
-                {size_type} size;
-                char* data;
-            }} buffer;
-        """.format(size_type=DEFAULT_INTEGER_CTYPE))
+        abort = self.context.imported_function("void", "abort")
 
-    @property
-    def cname(self):
-        return 'buffer*'
+        # bound check code
+        buffer_param = self.context.param(self.ctype, 'buffer')
+        index_param = self.context.param(
+            self.fields['size'].typ.ctype, 'index')
+        self.bound_check = self.context.internal_function(
+             "void", "bound_check", [buffer_param, index_param])
+
+        cmp_block = self.context.block(self.bound_check)
+        abort_block = self.context.block(self.bound_check)
+        ret_block = self.context.block(self.bound_check)
+
+        size = self.context.dereference_field(
+            buffer_param, self.fields['size'].cfield)
+        comparison = self.context.comparison('<', index_param, size)
+        cmp_block.end_with_conditonal(comparison, ret_block, abort_block)
+
+        abort_call = self.context.call(abort)
+        abort_block.add_eval(abort_call)
+        abort_block.end_with_void_return()
+
+        ret_block.end_with_void_return()
+
+    def binary_subscr(self, compiler, instruction):
+        index = compiler.stack.pop()
+        where = compiler.stack.pop()
+        context = compiler.context
+
+        assert isinstance(index.typ, Default), "index must be integer"
+        assert isinstance(where.typ, Buffer), "where must be buffer"
+
+        if True:
+            bound_check_call = context.call(
+                self.bound_check,
+                [where.tojit(context), index.tojit(context)])
+            compiler.block.add_eval(bound_check_call)
+
+        data = self.load_attribute(compiler, where, 'data')
+
+        rvalue = Rvalue(
+            compiler.types.byte, "[]",
+            context.array_access(data.tojit(context), index.tojit(context)))
+
+        tmp = compiler.temporary(rvalue)
+
+        compiler.block.add_assignment(
+            tmp.tojit(context),
+            rvalue.tojit(context))
+
+        compiler.stack.append(tmp)
 
 
 class Types:
@@ -167,6 +242,8 @@ class Types:
                 typid.name, (Struct,), {"name": typid.name, "fields": fields})
 
             return self._get_type(typ)
+        elif type(typid) is type and issubclass(typid, Type):
+            return self._get_type(typid)
 
         return self._get_type(str_to_typ[typid])
 
@@ -175,6 +252,11 @@ class Types:
             return self.cache[typ]
 
         instance = typ(self.context, self.ffi)
+
+        if issubclass(typ, Struct):
+            instance.fields = [
+                (self._get_type(t), n) for t, n in typ.fields]
+
         instance.build()
         self.cache[typ] = instance
 
