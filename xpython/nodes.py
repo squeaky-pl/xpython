@@ -14,6 +14,15 @@ class Rvalue:
         return '<Rvalue {}: {}>'.format(self.desc or '', self.typ)
 
 
+class Location:
+    def __init__(self, filename, lineno):
+        self.filename = filename
+        self.lineno = lineno
+
+    def tojit(self, context):
+        return context.location(self.filename, self.lineno, 0)
+
+
 class Constant(Rvalue):
     def __init__(self, typ, value):
         self.value = value
@@ -34,7 +43,8 @@ class Constant(Rvalue):
         return '<Constant {}: {}>'.format(self.value, self.typ)
 
     def _tojit(self, context):
-        return context.integer(self.value, self.typ.ctype)
+        return context.integer(
+            self.value, self.typ.ctype)
 
 
 class Global:

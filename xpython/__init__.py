@@ -3,12 +3,9 @@ import dis
 from cffi import FFI
 
 from xpython.c import CFunctions
-from xpython.types import Types, Default, Byte, Buffer, Void
+from xpython.types import Types, Buffer, Void
 from xpython.nodes import Rvalue, Constant, Global, Unreachable, Local, \
-    Temporary, Param
-
-
-BOUND_CHECKS = False
+    Temporary, Param, Location
 
 
 def get_fun_code(source):
@@ -61,8 +58,11 @@ class Compiler:
                 Param(self.param_types[i], code.co_varnames[i]))
             params = [v.tojit(self.context) for v in self.variables]
 
+        location = self.context.location(
+            self.code.co_filename, self.code.co_firstlineno, 0)
+
         self.function = self.context.exported_function(
-            self.ret_type.ctype, self.name, params)
+            self.ret_type.ctype, self.name, params, location)
 
         # setup locals
         for i in range(code.co_argcount, code.co_nlocals):
@@ -108,6 +108,10 @@ class Compiler:
 
     def emit(self):
         for instruction in dis.get_instructions(self.code):
+            if instruction.starts_line:
+                self.location = Location(
+                    self.code.co_filename, instruction.starts_line)
+
             print('block {}, stack {}'.format(self.block, self.stack))
 
             try:
@@ -131,7 +135,7 @@ class Compiler:
 
         self.block.add_assignment(
             variable.tojit(self.context),
-            a.tojit(self.context))
+            a.tojit(self.context), self.location.tojit(self.context))
 
     def temporary(self, src):
         tmp = Temporary(self.function, src.typ, self.temporaries, src)
@@ -146,7 +150,8 @@ class Compiler:
 
             self.block.add_assignment(
                 tmp.tojit(self.context),
-                var.tojit(self.context))
+                var.tojit(self.context),
+                self.location.tojit(self.context))
 
             push = tmp
         else:
@@ -261,9 +266,10 @@ class Compiler:
     def return_value(self, instruction):
         retval = self.stack.pop()
         if not isinstance(self.ret_type, Void):
-            self.block.end_with_return(retval.tojit(self.context))
+            self.block.end_with_return(
+                retval.tojit(self.context), self.location.tojit(self.context))
         else:
-            self.block.end_with_void_return()
+            self.block.end_with_void_return(self.location.tojit(self.context))
 
         self.block = next(self.block_iter, None)
 
@@ -271,14 +277,16 @@ class Compiler:
         next_block = next(self.block_iter)
         self.block.end_with_conditonal(
             self.stack.pop().tojit(self.context),
-            next_block, self.block_map[instruction.arg])
+            next_block, self.block_map[instruction.arg],
+            self.location.tojit(self.context))
         self.block = next_block
 
     def pop_jump_if_true(self, instruction):
         next_block = next(self.block_iter)
         self.block.end_with_conditonal(
             self.stack.pop().tojit(self.context),
-            self.block_map[instruction.arg], next_block)
+            self.block_map[instruction.arg], next_block,
+            self.location.tojit(self.context))
         self.block = next_block
 
     def pop_top(self, instruction):
@@ -286,27 +294,31 @@ class Compiler:
 
         if isinstance(top, Unreachable):
             next_block = next(self.block_iter)
-            self.block.end_with_jump(next_block)
+            self.block.end_with_jump(
+                next_block, self.location.tojit(self.context))
             self.block = next_block
 
     def jump_absolute(self, instruction):
-        self.block.end_with_jump(self.block_map[instruction.arg])
+        self.block.end_with_jump(
+            self.block_map[instruction.arg], self.location.tojit(self.context))
         self.block = next(self.block_iter)
 
     def break_loop(self, instruction):
-        self.block.end_with_jump(self.block_stack[-1])
+        self.block.end_with_jump(
+            self.block_stack[-1],
+            self.location.tojit(self.context))
         self.block = next(self.block_iter)
 
     def setup_loop(self, instruction):
         self.block_stack.append(
             self.block_map[instruction.offset + instruction.arg])
         next_block = next(self.block_iter)
-        self.block.end_with_jump(next_block)
+        self.block.end_with_jump(next_block, self.location.tojit(self.context))
         self.block = next_block
 
     def pop_block(self, instruction):
         next_block = next(self.block_iter)
-        self.block.end_with_jump(next_block)
+        self.block.end_with_jump(next_block, self.location.tojit(self.context))
         self.block = next_block
         self.block_stack.pop()
 
