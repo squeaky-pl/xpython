@@ -46,23 +46,28 @@ class Byte(Type, ByCopy):
         return 'char'
 
 
+class Field:
+    def __init__(self, name, typ, cfield):
+        self.name = name
+        self.typ = typ
+        self.cfield = cfield
+
+
 class Struct(Type):
     needs_temporary = False
 
     def build(self):
         self.fields = OrderedDict(
-            (name, typ) for typ, name in self.fields)
-        self.cfields = OrderedDict(
-            (name, self.context.field(typ.ctype, name))
-            for name, typ in self.fields.items())
+            (name, Field(name, typ, self.context.field(typ.ctype, name)))
+            for typ, name in self.fields)
 
         self._ctype = self.context.struct_type(
-            self.name, list(self.cfields.values()))
+            self.name, list(f.cfield for f in self.fields.values()))
         self.ctype = self.context.pointer_type(self._ctype)
 
         cffi_template = "typedef struct {\n"
-        for name, typ in self.fields.items():
-            cffi_template += "    {} {};\n".format(typ.cname, name)
+        for name, field in self.fields.items():
+            cffi_template += "    {} {};\n".format(field.typ.cname, name)
         cffi_template += '} ' + self.name + ';'
 
         self.ffi.cdef(cffi_template)
@@ -70,7 +75,7 @@ class Struct(Type):
     def store_attr(self, compiler, instruction):
         where = compiler.stack.pop()
         what = compiler.stack.pop()
-        cfield = self.cfields[instruction.argval]
+        cfield = self.fields[instruction.argval].cfield
         context = compiler.context
 
         deref = compiler.context.dereference_field(
@@ -81,14 +86,24 @@ class Struct(Type):
     def load_attr(self, compiler, instruction):
         where = compiler.stack.pop()
         name = instruction.argval
-        cfield = self.cfields[name]
+        cfield = self.fields[name].cfield
         context = compiler.context
 
         deref = compiler.context.dereference_field(
             where.tojit(context), cfield)
 
-        compiler.stack.append(Rvalue(
-            self.fields[name], '.' + name, deref))
+        rvalue = Rvalue(self.fields[name].typ, '.' + name, deref)
+
+        if self.fields[name].typ.needs_temporary:
+            tmp = compiler.temporary(rvalue)
+
+            compiler.block.add_assignment(
+                tmp.tojit(context),
+                rvalue.tojit(context))
+
+            compiler.stack.append(tmp)
+        else:
+            compiler.stack.append(rvalue)
 
     @property
     def cname(self):
