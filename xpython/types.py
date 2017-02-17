@@ -1,4 +1,5 @@
 from xpython.typing import struct
+from xpython.nodes import Rvalue
 from collections import OrderedDict
 
 
@@ -23,7 +24,11 @@ class Void(Type):
         return 'void'
 
 
-class Default(Type):
+class ByCopy:
+    needs_temporary = True
+
+
+class Default(Type, ByCopy):
     def build(self):
         self.ctype = self.context.type(DEFAULT_INTEGER_CTYPE)
 
@@ -32,7 +37,7 @@ class Default(Type):
         return DEFAULT_INTEGER_CTYPE
 
 
-class Byte(Type):
+class Byte(Type, ByCopy):
     def build(self):
         self.ctype = self.context.type('char')
 
@@ -42,17 +47,21 @@ class Byte(Type):
 
 
 class Struct(Type):
+    needs_temporary = False
+
     def build(self):
+        self.fields = OrderedDict(
+            (name, typ) for typ, name in self.fields)
         self.cfields = OrderedDict(
             (name, self.context.field(typ.ctype, name))
-            for typ, name in self.fields)
+            for name, typ in self.fields.items())
 
         self._ctype = self.context.struct_type(
             self.name, list(self.cfields.values()))
         self.ctype = self.context.pointer_type(self._ctype)
 
         cffi_template = "typedef struct {\n"
-        for typ, name in self.fields:
+        for name, typ in self.fields.items():
             cffi_template += "    {} {};\n".format(typ.cname, name)
         cffi_template += '} ' + self.name + ';'
 
@@ -68,6 +77,18 @@ class Struct(Type):
             where.tojit(context), cfield)
 
         compiler.block.add_assignment(deref, what.tojit(context))
+
+    def load_attr(self, compiler, instruction):
+        where = compiler.stack.pop()
+        name = instruction.argval
+        cfield = self.cfields[name]
+        context = compiler.context
+
+        deref = compiler.context.dereference_field(
+            where.tojit(context), cfield)
+
+        compiler.stack.append(Rvalue(
+            self.fields[name], '.' + name, deref))
 
     @property
     def cname(self):
