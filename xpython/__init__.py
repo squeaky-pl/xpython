@@ -214,27 +214,7 @@ class Compiler:
         stack[-1], stack[-2], stack[-3] = stack[-2], stack[-3], stack[-1]
 
     def store_subscr(self, instruction):
-        index = self.stack.pop()
-        where = self.stack.pop()
-        what = self.stack.pop()
-
-        assert isinstance(index.typ, Default), "index must be integer"
-        assert isinstance(where.typ, Buffer), "where must be buffer"
-        assert isinstance(what.typ, Byte), "what must be byte"
-
-        data = self.context.dereference_field(
-            where.tojit(self.context), self.types.buffer.data_field)
-
-        if BOUND_CHECKS:
-            bound_check_call = self.context.call(
-                self.bound_check,
-                [where.tojit(self.context), index.tojit(self.context)])
-            self.block.add_eval(bound_check_call)
-
-        lvalue = self.context.array_access(
-            data, index.tojit(self.context))
-
-        self.block.add_assignment(lvalue, what.tojit(self.context))
+        self.stack[-2].typ.store_subscr(self, instruction)
 
     def binary_subscr(self, instruction):
         self.stack[-2].typ.binary_subscr(self, instruction)
@@ -272,18 +252,6 @@ class Compiler:
 
                     return
 
-            if function.name == 'len' and instruction.arg == 1:
-                rvalue = arguments[0]
-
-                if isinstance(rvalue, Rvalue) and isinstance(rvalue.typ, Buffer):
-                    size = self.context.dereference_field(
-                        rvalue.tojit(self.context),
-                        self.types.buffer.size_field)
-
-                    self.stack.append(Rvalue(self.types.default, "size", size))
-
-                    return
-
             if function.name == 'print':
                 call = self.get_print(arguments)
 
@@ -293,6 +261,12 @@ class Compiler:
 
                 return
 
+            if instruction.arg == 1:
+                f = getattr(arguments[0].typ, function.name + '_call')
+                rvalue = f(self, arguments[0])
+                self.stack.append(rvalue)
+
+                return
 
         assert 0, "Don't know what to do with {}({})".format(
             function, arguments)

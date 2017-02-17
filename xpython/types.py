@@ -134,24 +134,6 @@ class Struct(Type):
 class Buffer(Struct):
     name = 'buffer'
     fields = [(Default, 'size'), (RawMem, 'data')]
-    # def build(self):
-    #     char_p = self.context.pointer_type("char")
-    #     self.size_field = self.context.field(DEFAULT_INTEGER_CTYPE, "size")
-    #     self.data_field = self.context.field(char_p, "data")
-    #     self.buffer_type = self.context.struct_type(
-    #         "buffer", [self.size_field, self.data_field])
-    #     self.ctype = self.context.pointer_type(self.buffer_type)
-    #
-    #     self.ffi.cdef("""
-    #         typedef struct {{
-    #             {size_type} size;
-    #             char* data;
-    #         }} buffer;
-    #     """.format(size_type=DEFAULT_INTEGER_CTYPE))
-    #
-    # @property
-    # def cname(self):
-    #     return 'buffer*'
 
     def build(self):
         super().build()
@@ -180,6 +162,9 @@ class Buffer(Struct):
 
         ret_block.end_with_void_return()
 
+    def len_call(self, compiler, argument):
+        return self.load_attribute(compiler, argument, 'size')
+
     def binary_subscr(self, compiler, instruction):
         index = compiler.stack.pop()
         where = compiler.stack.pop()
@@ -207,6 +192,29 @@ class Buffer(Struct):
             rvalue.tojit(context))
 
         compiler.stack.append(tmp)
+
+    def store_subscr(self, compiler, instruction):
+        index = compiler.stack.pop()
+        where = compiler.stack.pop()
+        what = compiler.stack.pop()
+        context = compiler.context
+
+        assert isinstance(index.typ, Default), "index must be integer"
+        assert isinstance(where.typ, Buffer), "where must be buffer"
+        assert isinstance(what.typ, Byte), "what must be byte"
+
+        data = self.load_attribute(compiler, where, 'data')
+
+        if True:
+            bound_check_call = context.call(
+                self.bound_check,
+                [where.tojit(context), index.tojit(context)])
+            compiler.block.add_eval(bound_check_call)
+
+        lvalue = context.array_access(
+            data.tojit(self.context), index.tojit(self.context))
+
+        compiler.block.add_assignment(lvalue, what.tojit(self.context))
 
 
 class Types:
