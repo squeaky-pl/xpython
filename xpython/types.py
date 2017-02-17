@@ -162,7 +162,7 @@ class Types:
         }
 
         if isinstance(typid, struct):
-            fields = [(self.get_type(t), name) for t, name in typid.fields]
+            fields = [(self.get_type(t), n) for n, t in typid.fields.items()]
             typ = type(
                 typid.name, (Struct,), {"name": typid.name, "fields": fields})
 
