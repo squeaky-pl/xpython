@@ -4,6 +4,8 @@ from collections import OrderedDict
 
 
 DEFAULT_INTEGER_CTYPE = 'int'
+OVERFLOW_CHECKS = True
+BOUND_CHECKS = True
 
 
 class Type:
@@ -36,7 +38,7 @@ class Integer(Type, ByCopy):
         a = compiler.stack.pop()
         context = compiler.context
 
-        if True and op in self.safe_arithmetic:
+        if OVERFLOW_CHECKS and op in self.safe_arithmetic:
             func = self.safe_arithmetic[op]
             result = context.call(
                 func, [a.tojit(context), b.tojit(context)])
@@ -242,7 +244,7 @@ class Buffer(Struct):
         assert isinstance(index.typ, Default), "index must be integer"
         assert isinstance(where.typ, Buffer), "where must be buffer"
 
-        if True:
+        if BOUND_CHECKS:
             bound_check_call = context.call(
                 self.bound_check,
                 [where.tojit(context), index.tojit(context)])
@@ -274,7 +276,7 @@ class Buffer(Struct):
 
         data = self.load_attribute(compiler, where, 'data')
 
-        if True:
+        if BOUND_CHECKS:
             bound_check_call = context.call(
                 self.bound_check,
                 [where.tojit(context), index.tojit(context)])
