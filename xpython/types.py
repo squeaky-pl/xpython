@@ -16,12 +16,10 @@ class Type:
 
 
 class Void(Type):
+    cname = 'void'
+
     def build(self):
         self.ctype = self.context.type("void")
-
-    @property
-    def cname(self):
-        return 'void'
 
 
 class ByCopy:
@@ -38,8 +36,13 @@ class Integer(Type, ByCopy):
         a = compiler.stack.pop()
         context = compiler.context
 
-        result = context.binary(
-            op, self.ctype, a.tojit(context), b.tojit(context))
+        if True and op in self.safe_arithmetic:
+            func = self.safe_arithmetic[op]
+            result = context.call(
+                func, [a.tojit(context), b.tojit(context)])
+        else:
+            result = context.binary(
+                op, self.ctype, a.tojit(context), b.tojit(context))
 
         compiler.stack.append(Rvalue(self, op, result))
 
@@ -69,8 +72,46 @@ class Integer(Type, ByCopy):
 class Default(Integer):
     cname = DEFAULT_INTEGER_CTYPE
 
+    def build(self):
+        super().build()
 
-class Byte(Type, ByCopy):
+        # arithmetic check code
+        self.safe_arithmetic = {}
+        false = self.context.false()
+        abort = self.context.imported_function("void", "abort")
+        for op, name in {'+': 'add', '-': 'sub', '*': 'mul'}.items():
+            a = self.context.param(self.ctype, 'a')
+            b = self.context.param(self.ctype, 'b')
+            builtin = self.context.builtin_function(
+                '__builtin_{}_overflow'.format(name))
+
+            f = self.context.internal_function(
+                self.ctype, "safe_{}".format(name), [a, b])
+            result = self.context.local(
+                f, self.ctype, 'result')
+            result_p = self.context.address(result)
+            overflow = self.context.local(
+                f, 'bool', 'overflow')
+
+            cmp_block = self.context.block(f)
+            abort_block = self.context.block(f)
+            ret_block = self.context.block(f)
+
+            builtin_call = self.context.call(builtin, [a, b, result_p])
+            cmp_block.add_assignment(overflow, builtin_call)
+            comparison = self.context.comparison('==', overflow, false)
+            cmp_block.end_with_conditonal(comparison, ret_block, abort_block)
+
+            abort_call = self.context.call(abort)
+            abort_block.add_eval(abort_call)
+            abort_block.end_with_jump(ret_block)
+
+            ret_block.end_with_return(result)
+
+            self.safe_arithmetic[op] = f
+
+
+class Byte(Integer):
     cname = 'char'
 
 
