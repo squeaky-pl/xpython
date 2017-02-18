@@ -1,3 +1,6 @@
+import types
+
+
 class Rvalue:
     def __init__(self, typ, desc=None, _jit=None):
         self.typ = typ
@@ -23,6 +26,15 @@ class Location:
         return context.location(self.filename, self.lineno, 0)
 
 
+class Function:
+    def __init__(self, qualname, code):
+        self.qualname = qualname
+        self.code = code
+
+    def __repr__(self):
+        return '<Function {}>'.format(self.qualname)
+
+
 class Constant(Rvalue):
     def __init__(self, typ, value):
         self.value = value
@@ -32,6 +44,12 @@ class Constant(Rvalue):
     def frompy(cls, compiler, value):
         if value is None:
             return None
+        elif isinstance(value, Function):
+            return value
+        elif isinstance(value, types.CodeType):
+            return value
+        elif isinstance(value, str):
+            return value
         elif isinstance(value, tuple):
             return cls(tuple(type(i) for i in value), value)
         elif isinstance(value, int):

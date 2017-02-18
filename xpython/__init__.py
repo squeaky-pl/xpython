@@ -5,7 +5,7 @@ from cffi import FFI
 from xpython.c import CFunctions
 from xpython.types import Types, Buffer, Void
 from xpython.nodes import Rvalue, Constant, Global, Unreachable, Local, \
-    Temporary, Param, Location
+    Temporary, Param, Location, Function
 
 
 def get_fun_code(source):
@@ -17,6 +17,54 @@ block_boundaries = [
     'RETURN_VALUE', 'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE', 'SETUP_LOOP', 'JUMP_ABSOLUTE',
     'BREAK_LOOP'
 ]
+
+
+class AbstractCompiler:
+    def __init__(self, context, code):
+        self.context = context
+        self.code = code
+        self.stack = []
+
+    def emit(self):
+        for instruction in dis.get_instructions(self.code):
+            if instruction.starts_line:
+                self.location = Location(
+                    self.code.co_filename, instruction.starts_line)
+
+            self.log()
+
+            try:
+                handler = getattr(self, instruction.opname.lower())
+            except AttributeError:
+                assert 0, "Unknown opname " + instruction.opname
+
+            handler(instruction)
+
+    def load_const(self, instruction):
+        self.stack.append(Constant.frompy(self, instruction.argval))
+
+
+class ModuleCompiler(AbstractCompiler):
+    def __init__(self, context, code):
+        super().__init__(context, code)
+        self.functions = OrderedDict()
+
+    def log(self):
+        print(self.stack)
+
+    def make_function(self, instruction):
+        flags = instruction.arg
+        qualname = self.stack.pop()
+        code = self.stack.pop()
+
+        self.stack.append(Function(qualname, code))
+
+    def store_name(self, instruction):
+        func = self.stack.pop()
+        self.functions[func.qualname] = func
+
+    def return_value(self, instruction):
+        self.stack.pop()
 
 
 class Compiler:
