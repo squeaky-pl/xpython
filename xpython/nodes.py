@@ -35,6 +35,15 @@ class Function:
         return '<Function {}>'.format(self.qualname)
 
 
+class Class:
+    def __init__(self, qualname, code):
+        self.qualname = qualname
+        self.code = code
+
+    def __repr__(self):
+        return '<Class {}>'.format(self.qualname)
+
+
 class Constant(Rvalue):
     def __init__(self, typ, value):
         self.value = value

@@ -5,7 +5,7 @@ from cffi import FFI
 from xpython.c import CFunctions
 from xpython.types import Types, Buffer, Void
 from xpython.nodes import Rvalue, Constant, Global, Unreachable, Local, \
-    Temporary, Param, Location, Function
+    Temporary, Param, Location, Function, Class
 
 
 def get_fun_code(source):
@@ -47,7 +47,7 @@ class AbstractCompiler:
 class ModuleCompiler(AbstractCompiler):
     def __init__(self, context, code):
         super().__init__(context, code)
-        self.functions = OrderedDict()
+        self.names = OrderedDict()
 
     def log(self):
         print(self.stack)
@@ -61,7 +61,23 @@ class ModuleCompiler(AbstractCompiler):
 
     def store_name(self, instruction):
         func = self.stack.pop()
-        self.functions[func.qualname] = func
+        self.names[func.qualname] = func
+
+    def load_build_class(self, instruction):
+        self.stack.append(Global('build_class'))
+
+    def call_function(self, instruction):
+        arguments = []
+        for _ in range(instruction.arg):
+            arguments.insert(0, self.stack.pop())
+        f = self.stack.pop()
+
+        if f.name == 'build_class':
+            self.stack.append(Class(arguments[1], arguments[0]))
+
+            return
+
+        assert 0
 
     def return_value(self, instruction):
         self.stack.pop()
