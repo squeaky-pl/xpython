@@ -20,8 +20,9 @@ block_boundaries = [
 
 
 class AbstractCompiler:
-    def __init__(self, context, code):
+    def __init__(self, context, ffi, code):
         self.context = context
+        self.ffi = ffi
         self.code = code
         self.stack = []
 
@@ -45,8 +46,8 @@ class AbstractCompiler:
 
 
 class ModuleCompiler(AbstractCompiler):
-    def __init__(self, context, code):
-        super().__init__(context, code)
+    def __init__(self, context, ffi, code):
+        super().__init__(context, ffi, code)
         self.names = OrderedDict()
 
     def log(self):
@@ -106,16 +107,31 @@ class ModuleCompiler(AbstractCompiler):
     def return_value(self, instruction):
         self.stack.pop()
 
+    def compile(self):
+        self.emit()
+
+        for name, function in self.names.items():
+            ann = function.annotations
+            compiler = Compiler(
+                self.context, self.ffi, function.code,
+                ann['return'].name, name,
+                [n.name for k, n in ann.items() if k != 'return'])
+            compiler.setup_function()
+            compiler.setup_blocks()
+            compiler.emit()
+
+        return CompilerResult(self, self.context.compile())
+
 
 class Compiler:
-    def __init__(self, context, code, ret_type, name, param_types):
+    def __init__(self, context, ffi, code, ret_type, name, param_types):
         self.context = context
         self.code = code
         self.name = name
         self.stack = []
         self.temporaries = 0
 
-        self.ffi = FFI()
+        self.ffi = ffi
         self.types = Types(context, self.ffi)
 
         self.ret_type = self.types.get_type(ret_type)

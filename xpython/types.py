@@ -309,6 +309,7 @@ class Types:
     def get_type(self, typid):
         str_to_typ = {
             'void': Void,
+            'int': Default,
             int: Default,
             'default': Default,
             'byte': Byte,
