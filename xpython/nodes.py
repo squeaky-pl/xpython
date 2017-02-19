@@ -27,12 +27,13 @@ class Location:
 
 
 class Function:
-    def __init__(self, qualname, code):
+    def __init__(self, qualname, code, annotations):
         self.qualname = qualname
         self.code = code
+        self.annotations = annotations
 
     def __repr__(self):
-        return '<Function {}>'.format(self.qualname)
+        return '<Function {0.qualname} ann={0.annotations}>'.format(self)
 
 
 class Class:
@@ -42,6 +43,22 @@ class Class:
 
     def __repr__(self):
         return '<Class {}>'.format(self.qualname)
+
+
+class Name:
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return '<Name {}>'.format(self.name)
+
+
+class ConstKeyMap:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return '<ConstKeyMap {}>'.format(self.value)
 
 
 class Constant(Rvalue):

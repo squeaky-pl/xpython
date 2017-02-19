@@ -5,7 +5,7 @@ from cffi import FFI
 from xpython.c import CFunctions
 from xpython.types import Types, Buffer, Void
 from xpython.nodes import Rvalue, Constant, Global, Unreachable, Local, \
-    Temporary, Param, Location, Function, Class
+    Temporary, Param, Location, Function, Class, ConstKeyMap, Name
 
 
 def get_fun_code(source):
@@ -53,18 +53,42 @@ class ModuleCompiler(AbstractCompiler):
         print(self.stack)
 
     def make_function(self, instruction):
+        ANNOTATION_DICTIONARY = 0x04
         flags = instruction.arg
+
+        annotations = None
+        if flags & ANNOTATION_DICTIONARY:
+            flags ^= ANNOTATION_DICTIONARY
+            annotations = True
+
+        assert flags == 0
+
         qualname = self.stack.pop()
         code = self.stack.pop()
 
-        self.stack.append(Function(qualname, code))
+        if annotations:
+            annotations = self.stack.pop().value
+
+        self.stack.append(Function(qualname, code, annotations))
 
     def store_name(self, instruction):
         func = self.stack.pop()
         self.names[func.qualname] = func
 
+    def load_name(self, instruction):
+        self.stack.append(Name(instruction.argval))
+
     def load_build_class(self, instruction):
         self.stack.append(Global('build_class'))
+
+    def build_const_key_map(self, instruction):
+        keys = self.stack.pop().value
+        arguments = []
+        for _ in range(instruction.arg):
+            arguments.insert(0, self.stack.pop())
+
+        map = ConstKeyMap(OrderedDict(zip(keys, arguments)))
+        self.stack.append(map)
 
     def call_function(self, instruction):
         arguments = []
