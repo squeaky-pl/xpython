@@ -47,6 +47,8 @@ class AbstractCompiler:
 
 class ModuleCompiler(AbstractCompiler):
     def __init__(self, context, ffi, code):
+        self.types = Types(context, ffi)
+
         super().__init__(context, ffi, code)
         self.names = OrderedDict()
 
@@ -113,7 +115,7 @@ class ModuleCompiler(AbstractCompiler):
         for name, function in self.names.items():
             ann = function.annotations
             compiler = Compiler(
-                self.context, self.ffi, function.code,
+                self.context, self.ffi, self.types, function.code,
                 ann['return'].name, name,
                 [n.name for k, n in ann.items() if k != 'return'])
             compiler.setup_function()
@@ -123,8 +125,8 @@ class ModuleCompiler(AbstractCompiler):
         return CompilerResult(self, self.context.compile())
 
 
-class Compiler:
-    def __init__(self, context, ffi, code, ret_type, name, param_types):
+class Compiler(AbstractCompiler):
+    def __init__(self, context, ffi, types, code, ret_type, name, param_types):
         self.context = context
         self.code = code
         self.name = name
@@ -132,7 +134,7 @@ class Compiler:
         self.temporaries = 0
 
         self.ffi = ffi
-        self.types = Types(context, self.ffi)
+        self.types = types
 
         self.ret_type = self.types.get_type(ret_type)
         self.param_types = [self.types.get_type(p) for p in param_types]
@@ -210,23 +212,8 @@ class Compiler:
         self.block = next(self.block_iter)
         self.block_stack = []
 
-    def emit(self):
-        for instruction in dis.get_instructions(self.code):
-            if instruction.starts_line:
-                self.location = Location(
-                    self.code.co_filename, instruction.starts_line)
-
-            print('block {}, stack {}'.format(self.block, self.stack))
-
-            try:
-                handler = getattr(self, instruction.opname.lower())
-            except AttributeError:
-                assert 0, "Unknown opname " + instruction.opname
-
-            handler(instruction)
-
-    def load_const(self, instruction):
-        self.stack.append(Constant.frompy(self, instruction.argval))
+    def log(self):
+        print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_global(self, instruction):
         self.stack.append(Global(instruction.argval))
