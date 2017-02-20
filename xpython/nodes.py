@@ -84,7 +84,7 @@ class Constant(Rvalue):
         elif isinstance(value, types.CodeType):
             return value
         elif isinstance(value, str):
-            return value
+            return cls(str, value)
         elif isinstance(value, tuple):
             return cls(tuple(type(i) for i in value), value)
         elif isinstance(value, int):

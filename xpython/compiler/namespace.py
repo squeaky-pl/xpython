@@ -4,6 +4,7 @@ from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
 from xpython.nodes import Function, ConstKeyMap, Name, Global, Class
+from xpython.typing import struct
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -62,6 +63,12 @@ class NamespaceCompiler(AbstractCompiler):
 
         if f.name == 'build_class':
             self.stack.append(Class(arguments[1], arguments[0]))
+
+            return
+
+        if f.name == 'struct':
+            arguments = [a.value for a in arguments]
+            self.stack.append(struct(*arguments))
 
             return
 

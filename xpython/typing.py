@@ -20,6 +20,13 @@ class struct:
 
         return struct_instance(self, kwargs)
 
+    def __repr__(self):
+        r = '<struct {} '.format(self.name)
+        r += ','.join(n + ': ' + str(t) for n, t in self.fields.items())
+        r += '>'
+
+        return r
+
 
 class struct_instance:
     def __init__(self, typ, values):
