@@ -35,14 +35,20 @@ class Function:
     def __repr__(self):
         return '<Function {0.qualname} ann={0.annotations}>'.format(self)
 
+    def __str__(self):
+        return self.qualname
+
 
 class Class:
-    def __init__(self, qualname, code):
+    def __init__(self, qualname, function):
         self.qualname = qualname
-        self.code = code
+        self.function = function
 
     def __repr__(self):
         return '<Class {}>'.format(self.qualname)
+
+    def __str__(self):
+        return self.qualname
 
 
 class Name:
@@ -51,6 +57,9 @@ class Name:
 
     def __repr__(self):
         return '<Name {}>'.format(self.name)
+
+    def __str__(self):
+        return self.name
 
 
 class ConstKeyMap:
