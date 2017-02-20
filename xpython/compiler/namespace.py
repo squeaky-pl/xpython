@@ -12,7 +12,8 @@ class NamespaceCompiler(AbstractCompiler):
         self.types = types
 
         super().__init__(context, ffi, code)
-        self.names = OrderedDict()
+        self.names = OrderedDict([
+            ('struct', struct), ('void', 'void')])
 
     def log(self):
         print(self.stack)
@@ -28,7 +29,7 @@ class NamespaceCompiler(AbstractCompiler):
 
         assert flags == 0
 
-        qualname = self.stack.pop()
+        qualname = self.stack.pop().value
         code = self.stack.pop()
 
         if annotations:
@@ -41,7 +42,7 @@ class NamespaceCompiler(AbstractCompiler):
         self.names[instruction.argval] = arg
 
     def load_name(self, instruction):
-        self.stack.append(Name(instruction.argval))
+        self.stack.append(self.names[instruction.argval])
 
     def load_build_class(self, instruction):
         self.stack.append(Global('build_class'))
@@ -61,12 +62,12 @@ class NamespaceCompiler(AbstractCompiler):
             arguments.insert(0, self.stack.pop())
         f = self.stack.pop()
 
-        if f.name == 'build_class':
+        if getattr(f, 'name', None) and f.name == 'build_class':
             self.stack.append(Class(arguments[1], arguments[0]))
 
             return
 
-        if f.name == 'struct':
+        if f is struct:
             arguments = [a.value for a in arguments]
             self.stack.append(struct(*arguments))
 
@@ -80,12 +81,15 @@ class NamespaceCompiler(AbstractCompiler):
     def compile(self):
         self.emit()
 
-        for name, function in self.names.items():
-            ann = function.annotations
+        for name, item in self.names.items():
+            if not isinstance(item, Function):
+                continue
+
+            ann = item.annotations
             compiler = FunctionCompiler(
-                self.context, self.ffi, self.types, function.code,
-                ann['return'].name, name,
-                [n.name for k, n in ann.items() if k != 'return'])
+                self.context, self.ffi, self.types, item.code,
+                ann['return'], name,
+                [v for k, v in ann.items() if k != 'return'])
             compiler.setup_function()
             compiler.setup_blocks()
             compiler.emit()

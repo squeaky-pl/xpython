@@ -328,6 +328,9 @@ class Types:
         return self._get_type(str_to_typ[typid])
 
     def _get_type(self, typ):
+        if isinstance(typ, Type):
+            return typ
+            
         if typ in self.cache:
             return self.cache[typ]
 
