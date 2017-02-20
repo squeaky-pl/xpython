@@ -186,6 +186,9 @@ class FunctionCompiler(AbstractCompiler):
         stack = self.stack
         stack[-1], stack[-2], stack[-3] = stack[-2], stack[-3], stack[-1]
 
+    def dup_top(self, instruction):
+        self.stack.append(self.stack[-1])
+
     def store_subscr(self, instruction):
         self.stack[-2].typ.store_subscr(self, instruction)
 
