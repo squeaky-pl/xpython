@@ -1,4 +1,4 @@
-from xpython.typing import struct
+from xpython.typing import struct, struct_value
 from xpython.nodes import Rvalue
 from collections import OrderedDict
 
@@ -149,6 +149,10 @@ class Field:
         self.cfield = cfield
 
 
+class ValueStruct(Type):
+    pass
+
+
 class Struct(Type):
     needs_temporary = False
 
@@ -157,9 +161,13 @@ class Struct(Type):
             (name, Field(name, typ, self.context.field(typ.ctype, name)))
             for typ, name in self.fields)
 
-        self._ctype = self.context.struct_type(
+        value_ctype = self.context.struct_type(
             self.name, list(f.cfield for f in self.fields.values()))
-        self.ctype = self.context.pointer_type(self._ctype)
+        self.ctype = self.context.pointer_type(value_ctype)
+
+        self.value = ValueStruct(self.context, self.ffi)
+        self.value.ctype = value_ctype
+        self.value.cname = self.name
 
         cffi_template = "typedef struct {\n"
         for name, field in self.fields.items():
@@ -335,6 +343,8 @@ class Types:
                 typid.name, (Struct,), {"name": typid.name, "fields": fields})
 
             return self._get_type(typ)
+        elif isinstance(typid, struct_value):
+            return self.get_type(typid.instance).value
         elif type(typid) is type and issubclass(typid, Type):
             return self._get_type(typid)
 

@@ -20,12 +20,24 @@ class struct:
 
         return struct_instance(self, kwargs)
 
+    @property
+    def value(self):
+        return struct_value(self)
+
     def __repr__(self):
         r = '<struct {} '.format(self.name)
         r += ','.join(n + ': ' + str(t) for n, t in self.fields.items())
         r += '>'
 
         return r
+
+
+class struct_value:
+    def __init__(self, instance):
+        self.instance = instance
+
+    def __repr__(self):
+        return '<struct_value {}>'.format(self.instance)
 
 
 PyObject = struct(
@@ -37,7 +49,8 @@ PyObject = struct(
 
 class py_struct(struct):
     def __init__(self, name, *fields):
-        pass
+        super().__init__(name, ('ob_base', PyObject.value), *fields)
+
 
 
 class struct_instance:

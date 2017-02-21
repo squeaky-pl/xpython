@@ -4,7 +4,7 @@ from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
 from xpython.nodes import Function, ConstKeyMap, Global, Class
-from xpython.typing import struct, PyObject
+from xpython.typing import struct, PyObject, py_struct
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -14,7 +14,7 @@ class NamespaceCompiler(AbstractCompiler):
         super().__init__(context, ffi, code)
         self.names = OrderedDict([
             ('struct', struct), ('void', 'void'),
-            ('PyObject', PyObject)])
+            ('PyObject', PyObject), ('py_struct', py_struct)])
 
     def log(self):
         print(self.stack)
@@ -68,9 +68,9 @@ class NamespaceCompiler(AbstractCompiler):
 
             return
 
-        if f is struct:
+        if issubclass(f, struct):
             arguments = [a.value for a in arguments]
-            self.stack.append(struct(*arguments))
+            self.stack.append(f(*arguments))
 
             return
 
