@@ -24,6 +24,13 @@ class Void(Type):
         self.ctype = self.context.type("void")
 
 
+class Opaque(Type):
+    cname = 'void*'
+
+    def build(self):
+        self.ctype = self.context.type("void*")
+
+
 class ByCopy:
     needs_temporary = True
 
@@ -111,6 +118,10 @@ class Default(Integer):
             ret_block.end_with_return(result)
 
             self.safe_arithmetic[op] = f
+
+
+class SSize(Integer):
+    cname = 'ssize_t'
 
 
 class Byte(Integer):
@@ -309,8 +320,10 @@ class Types:
     def get_type(self, typid):
         str_to_typ = {
             'void': Void,
+            'opaque': Opaque,
             'int': Default,
             int: Default,
+            'ssize': SSize,
             'default': Default,
             'byte': Byte,
             'buffer': Buffer
@@ -330,7 +343,7 @@ class Types:
     def _get_type(self, typ):
         if isinstance(typ, Type):
             return typ
-            
+
         if typ in self.cache:
             return self.cache[typ]
 

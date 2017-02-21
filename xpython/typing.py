@@ -28,6 +28,18 @@ class struct:
         return r
 
 
+PyObject = struct(
+    'PyObject',
+
+    ('ob_refcnt', 'ssize'),
+    ('ob_type', 'opaque'))
+
+
+class py_struct(struct):
+    def __init__(self, name, *fields):
+        pass
+
+
 class struct_instance:
     def __init__(self, typ, values):
         self.__type = typ

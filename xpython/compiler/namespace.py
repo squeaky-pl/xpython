@@ -3,8 +3,8 @@ from collections import OrderedDict
 from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
-from xpython.nodes import Function, ConstKeyMap, Name, Global, Class
-from xpython.typing import struct
+from xpython.nodes import Function, ConstKeyMap, Global, Class
+from xpython.typing import struct, PyObject
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -13,7 +13,8 @@ class NamespaceCompiler(AbstractCompiler):
 
         super().__init__(context, ffi, code)
         self.names = OrderedDict([
-            ('struct', struct), ('void', 'void')])
+            ('struct', struct), ('void', 'void'),
+            ('PyObject', PyObject)])
 
     def log(self):
         print(self.stack)
