@@ -4,7 +4,8 @@ from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
 from xpython.nodes import Function, ConstKeyMap, Global, Class
-from xpython.typing import struct, PyObject, py_struct
+from xpython.typing import struct
+from xpython.cpy import PyObject, py_struct
 
 
 class NamespaceCompiler(AbstractCompiler):

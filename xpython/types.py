@@ -128,6 +128,14 @@ class Byte(Integer):
     cname = 'char'
 
 
+class UInt(Integer):
+    cname = 'unsigned int'
+
+
+class Unsigned(Integer):
+    cname = 'unsigned long'
+
+
 class ByRef:
     needs_temporary = False
 
@@ -140,6 +148,13 @@ class RawMem(Type, ByRef):
     @property
     def cname(self):
         return 'char*'
+
+
+class CStr(Type, ByRef):
+    cname = 'const char*'
+
+    def build(self):
+        self.ctype = self.context.type('const char*')
 
 
 class Field:
@@ -329,12 +344,16 @@ class Types:
         str_to_typ = {
             'void': Void,
             'opaque': Opaque,
+            ...: Opaque,
             'int': Default,
             int: Default,
+            'uint': UInt,
+            'unsigned': Unsigned,
             'ssize': SSize,
             'default': Default,
             'byte': Byte,
-            'buffer': Buffer
+            'buffer': Buffer,
+            'cstr': CStr
         }
 
         if isinstance(typid, struct):

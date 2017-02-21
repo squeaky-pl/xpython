@@ -40,19 +40,6 @@ class struct_value:
         return '<struct_value {}>'.format(self.instance)
 
 
-PyObject = struct(
-    'PyObject',
-
-    ('ob_refcnt', 'ssize'),
-    ('ob_type', 'opaque'))
-
-
-class py_struct(struct):
-    def __init__(self, name, *fields):
-        super().__init__(name, ('ob_base', PyObject.value), *fields)
-
-
-
 class struct_instance:
     def __init__(self, typ, values):
         self.__type = typ
