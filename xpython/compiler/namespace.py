@@ -4,8 +4,8 @@ from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
 from xpython.nodes import Function, ConstKeyMap, Global, Class
-from xpython.typing import struct
-from xpython.cpy import PyObject, py_struct
+from xpython.typing import struct, struct_instance
+from xpython.cpy import PyObject, py_struct, PyObjectType
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -15,7 +15,8 @@ class NamespaceCompiler(AbstractCompiler):
         super().__init__(context, ffi, code)
         self.names = OrderedDict([
             ('struct', struct), ('void', 'void'),
-            ('PyObject', PyObject), ('py_struct', py_struct)])
+            ('PyObject', PyObject), ('PyObjectType', PyObjectType),
+            ('py_struct', py_struct)])
 
     def log(self):
         print(self.stack)
@@ -41,7 +42,14 @@ class NamespaceCompiler(AbstractCompiler):
 
     def store_name(self, instruction):
         arg = self.stack.pop()
-        self.names[instruction.argval] = arg
+
+        if isinstance(arg, struct_instance):
+            typ = self.types.get_type(arg.typ)
+            value = typ.store_name(self, instruction)
+        else:
+            value = arg
+
+        self.names[instruction.argval] = value
 
     def load_name(self, instruction):
         self.stack.append(self.names[instruction.argval])
@@ -67,6 +75,11 @@ class NamespaceCompiler(AbstractCompiler):
         if getattr(f, 'name', None) and f.name == 'build_class':
             self.stack.append(Class(arguments[1], arguments[0]))
 
+            return
+
+        if isinstance(f, struct):
+            assert instruction.arg == 0
+            self.stack.append(f())
             return
 
         if issubclass(f, struct):

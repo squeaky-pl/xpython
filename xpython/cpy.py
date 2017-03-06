@@ -5,7 +5,7 @@ PyObject = struct(
     'PyObject',
 
     ('ob_refcnt', 'ssize'),
-    ('ob_type', 'opaque'))
+    ('ob_type', ...))
 
 
 PyVarObject = struct(
@@ -28,7 +28,7 @@ PyObjectType = struct(
     ('tp_print', ...),
     ('tp_getattr', ...),
     ('tp_setattr', ...),
-    ('tp_as_sync', ...),
+    ('tp_as_async', ...),
     ('tp_repr', ...),
 
     ('tp_as_number', ...),

@@ -228,6 +228,11 @@ class Struct(Type):
 
         compiler.stack.append(self.load_attribute(compiler, where, name))
 
+    def store_name(self, compiler, instruction):
+        return compiler.context.exported_global(
+            self.value.ctype, instruction.argval,
+            compiler.location.tojit(compiler.context))
+
     @property
     def cname(self):
         return self.name + '*'

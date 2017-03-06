@@ -46,10 +46,14 @@ class struct_instance:
         for k, v in values.items():
             setattr(self, k, v)
 
+    @property
+    def typ(self):
+        return self.__type
+
     def __repr__(self):
         r = '<' + self.__type.name + ' '
         r += ' '.join(
-            f + '=' + str(getattr(self, f)) for f in self.__type.fields)
+            f + '=' + str(getattr(self, f, '<notini>')) for f in self.__type.fields)
         r += '>'
 
         return r
