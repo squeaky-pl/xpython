@@ -16,7 +16,7 @@ block_boundaries = [
 
 
 class FunctionCompiler(AbstractCompiler):
-    def __init__(self, context, ffi, types, code, ret_type, name, param_types):
+    def __init__(self, context, ffi, types, names, code, ret_type, name, param_types):
         self.context = context
         self.code = code
         self.name = name
@@ -25,6 +25,7 @@ class FunctionCompiler(AbstractCompiler):
 
         self.ffi = ffi
         self.types = types
+        self.names = names
 
         self.ret_type = self.types.get_type(ret_type)
         self.param_types = [self.types.get_type(p) for p in param_types]
@@ -106,7 +107,13 @@ class FunctionCompiler(AbstractCompiler):
         print('block {}, stack {}'.format(self.block, self.stack))
 
     def load_global(self, instruction):
-        self.stack.append(Global(instruction.argval))
+        name = instruction.argval
+        try:
+            glbl = self.names[name]
+        except KeyError:
+            glbl = Global(name)
+
+        self.stack.append(glbl)
 
     def store_fast(self, instruction):
         variable = self.variables[instruction.arg]
@@ -226,6 +233,18 @@ class FunctionCompiler(AbstractCompiler):
                             Constant(self.types.byte, rvalue.value))
                     else:
                         assert 0, "Constant out of bounds for byte"
+
+                    return
+
+            if function.name == 'uint' and instruction.arg == 1:
+                rvalue = arguments[0]
+
+                if isinstance(rvalue, Constant):
+                    if 0 <= rvalue.value <= 0xffffffff:
+                        self.stack.append(
+                            Constant(self.types.uint, rvalue.value))
+                    else:
+                        assert 0, "Constant out of bounds for uint"
 
                     return
 

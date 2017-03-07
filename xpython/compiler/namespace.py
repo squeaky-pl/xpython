@@ -102,7 +102,7 @@ class NamespaceCompiler(AbstractCompiler):
 
             ann = item.annotations
             compiler = FunctionCompiler(
-                self.context, self.ffi, self.types, item.code,
+                self.context, self.ffi, self.types, self.names, item.code,
                 ann['return'], name,
                 [v for k, v in ann.items() if k != 'return'])
             compiler.setup_function()

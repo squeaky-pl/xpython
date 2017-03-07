@@ -1,5 +1,5 @@
 from xpython.typing import struct, struct_value
-from xpython.nodes import Rvalue
+from xpython.nodes import Rvalue, GlobalVar
 from collections import OrderedDict
 
 
@@ -229,9 +229,16 @@ class Struct(Type):
         compiler.stack.append(self.load_attribute(compiler, where, name))
 
     def store_name(self, compiler, instruction):
-        return compiler.context.exported_global(
-            self.value.ctype, instruction.argval,
-            compiler.location.tojit(compiler.context))
+        name = instruction.argval
+        context = compiler.context
+        location = compiler.location.tojit(context)
+        lvalue = context.exported_global(
+            self.value.ctype, name, location)
+        lvalue_ptr = context.address(lvalue, location)
+
+        return GlobalVar(self, name, lvalue_ptr)
+
+
 
     @property
     def cname(self):
@@ -344,6 +351,10 @@ class Types:
     @property
     def byte(self):
         return self._get_type(Byte)
+
+    @property
+    def uint(self):
+        return self._get_type(UInt)
 
     def get_type(self, typid):
         str_to_typ = {

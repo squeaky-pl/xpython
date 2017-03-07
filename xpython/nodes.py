@@ -108,6 +108,11 @@ class Global:
         return '<Global {}>'.format(self.name)
 
 
+class GlobalVar(Rvalue):
+    def __repr__(self):
+        return '<GlobalVar {}: {}>'.format(self.desc, self.typ)
+
+
 class Unreachable:
     pass
 
