@@ -248,6 +248,30 @@ class FunctionCompiler(AbstractCompiler):
 
                     return
 
+            if function.name == 'ssize' and instruction.arg == 1:
+                rvalue = arguments[0]
+
+                if isinstance(rvalue, Constant):
+                    if -2 ** 63 + 1 <= rvalue.value <= 0x7fff_ffff_ffff_ffff:
+                        self.stack.append(
+                            Constant(self.types.ssize, rvalue.value))
+                    else:
+                        assert 0, "Constant out of bounds for ssize"
+
+                    return
+
+            if function.name == 'cstr' and instruction.arg == 1:
+                rvalue = arguments[0]
+
+                if isinstance(rvalue, Constant):
+                    if isinstance(rvalue.value, bytes):
+                        self.stack.append(
+                            Constant(self.types.cstr, rvalue.value))
+                    else:
+                        assert 0, "Constant for cstr needs to bytes const"
+
+                    return
+
             if function.name == 'print':
                 call = self.get_print(arguments)
 

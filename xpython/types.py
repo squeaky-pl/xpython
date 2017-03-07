@@ -77,6 +77,10 @@ class Integer(Type, ByCopy):
 
     inplace_floor_divide = binary_floor_divide
 
+    def jit_constant(self, context, value):
+        return context.integer(
+            value, self.ctype)
+
 
 class Default(Integer):
     cname = DEFAULT_INTEGER_CTYPE
@@ -155,6 +159,9 @@ class CStr(Type, ByRef):
 
     def build(self):
         self.ctype = self.context.type('const char*')
+
+    def jit_constant(self, context, value):
+        return context.string_literal(value)
 
 
 class Field:
@@ -237,8 +244,6 @@ class Struct(Type):
         lvalue_ptr = context.address(lvalue, location)
 
         return GlobalVar(self, name, lvalue_ptr)
-
-
 
     @property
     def cname(self):
@@ -359,6 +364,14 @@ class Types:
     @property
     def uint(self):
         return self._get_type(UInt)
+
+    @property
+    def ssize(self):
+        return self._get_type(SSize)
+
+    @property
+    def cstr(self):
+        return self._get_type(CStr)
 
     def get_type(self, typid):
         str_to_typ = {

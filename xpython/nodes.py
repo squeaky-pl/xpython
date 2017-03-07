@@ -83,8 +83,8 @@ class Constant(Rvalue):
             return value
         elif isinstance(value, types.CodeType):
             return value
-        elif isinstance(value, str):
-            return cls(str, value)
+        elif isinstance(value, (str, bytes)):
+            return cls(type(value), value)
         elif isinstance(value, tuple):
             return cls(tuple(type(i) for i in value), value)
         elif isinstance(value, int):
@@ -96,8 +96,7 @@ class Constant(Rvalue):
         return '<Constant {}: {}>'.format(self.value, self.typ)
 
     def _tojit(self, context):
-        return context.integer(
-            self.value, self.typ.ctype)
+        return self.typ.jit_constant(context, self.value)
 
 
 class Global:
