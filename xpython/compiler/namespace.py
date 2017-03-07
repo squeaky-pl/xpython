@@ -3,20 +3,23 @@ from collections import OrderedDict
 from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
-from xpython.nodes import Function, ConstKeyMap, Global, Class
+from xpython.nodes import Function, ConstKeyMap, Global, Class, Constant
 from xpython.typing import struct, struct_instance
-from xpython.cpy import PyObject, py_struct, PyObjectType
+from xpython.cpy import PyObject, py_struct, PyObjectType, Py_TPFLAGS_DEFAULT
 
 
 class NamespaceCompiler(AbstractCompiler):
     def __init__(self, context, ffi, types, code):
         self.types = types
 
+        default_const = Constant(types.unsigned, Py_TPFLAGS_DEFAULT)
+
         super().__init__(context, ffi, code)
         self.names = OrderedDict([
             ('struct', struct), ('void', 'void'),
             ('PyObject', PyObject), ('PyObjectType', PyObjectType),
-            ('py_struct', py_struct)])
+            ('py_struct', py_struct),
+            ('Py_TPFLAGS_DEFAULT', default_const)])
 
     def log(self):
         print(self.stack)

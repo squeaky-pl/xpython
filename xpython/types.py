@@ -345,6 +345,10 @@ class Types:
         return self._get_type(Buffer)
 
     @property
+    def unsigned(self):
+        return self._get_type(Unsigned)
+
+    @property
     def default(self):
         return self._get_type(Default)
 
