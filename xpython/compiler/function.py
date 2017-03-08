@@ -288,6 +288,12 @@ class FunctionCompiler(AbstractCompiler):
 
                 return
 
+        if callable(function):
+            result = function(self, arguments)
+            self.stack.append(Constant.frompy(self, None))
+
+            return
+
         assert 0, "Don't know what to do with {}({})".format(
             function, arguments)
 

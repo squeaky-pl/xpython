@@ -1,5 +1,5 @@
 from xpython.typing import struct, struct_value
-from xpython.nodes import Rvalue, GlobalVar
+from xpython.nodes import Rvalue, GlobalVar, Constant
 from collections import OrderedDict
 
 
@@ -16,6 +16,12 @@ class Type:
     def __str__(self):
         return type(self).__name__
 
+    def default_jit_constant(self, context):
+        return self.jit_constnat(context, self.default)
+
+    def default_constant(self):
+        return Constant(self, self.default)
+
 
 class Void(Type):
     cname = 'void'
@@ -24,16 +30,20 @@ class Void(Type):
         self.ctype = self.context.type("void")
 
 
-class Opaque(Type):
-    cname = 'void*'
-
-    def build(self):
-        self.ctype = self.context.type("void*")
+class Ptr(Type):
+    default = None
 
     def jit_constant(self, context, value):
         assert value is None
 
         return context.null(self.ctype)
+
+
+class Opaque(Ptr):
+    cname = 'void*'
+
+    def build(self):
+        self.ctype = self.context.type("void*")
 
 
 class ByCopy:
@@ -42,6 +52,8 @@ class ByCopy:
 
 # abstract
 class Integer(Type, ByCopy):
+    default = 0
+
     def build(self):
         self.ctype = self.context.type(self.cname)
 
@@ -149,7 +161,7 @@ class ByRef:
     needs_temporary = False
 
 
-class RawMem(Type, ByRef):
+class RawMem(Ptr, ByRef):
     def build(self):
         char = self.context.type('char')
         self.ctype = self.context.pointer_type(char)
@@ -159,13 +171,16 @@ class RawMem(Type, ByRef):
         return 'char*'
 
 
-class CStr(Type, ByRef):
+class CStr(Ptr, ByRef):
     cname = 'const char*'
 
     def build(self):
         self.ctype = self.context.type('const char*')
 
     def jit_constant(self, context, value):
+        if value is None:
+            return Ptr.jit_constant(self, context, value)
+
         return context.string_literal(value)
 
 
@@ -177,15 +192,21 @@ class Field:
 
 
 class AbstractStruct(Type):
-    def store_attr(self, compiler, instruction):
-        where = compiler.stack.pop()
-        what = compiler.stack.pop()
-        cfield = self.fields[instruction.argval].cfield
+    def store_attribute(self, compiler, where, name, what):
         context = compiler.context
+
+        cfield = self.fields[name].cfield
 
         accessed = self.access_field_lvalue(where.tojit(context), cfield)
 
         compiler.block.add_assignment(accessed, what.tojit(context))
+
+    def store_attr(self, compiler, instruction):
+        where = compiler.stack.pop()
+        what = compiler.stack.pop()
+        name = instruction.argval
+
+        self.store_attribute(compiler, where, name, what)
 
     def load_attribute(self, compiler, where, name):
         context = compiler.context
@@ -229,7 +250,7 @@ class ValueStruct(AbstractStruct):
         return GlobalVar(self, name, lvalue)
 
 
-class Struct(AbstractStruct):
+class Struct(Ptr, AbstractStruct):
     needs_temporary = False
 
     def build(self):
