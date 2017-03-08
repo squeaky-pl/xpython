@@ -210,19 +210,18 @@ class AbstractStruct(Type):
 
         compiler.stack.append(self.load_attribute(compiler, where, name))
 
+
+class ValueStruct(AbstractStruct):
+    needs_temporary = False
+
     def store_name(self, compiler, instruction):
         name = instruction.argval
         context = compiler.context
         location = compiler.location.tojit(context)
         lvalue = context.exported_global(
-            self.value.ctype, name, location)
-        lvalue_ptr = context.address(lvalue, location)
+            self.ctype, name, location)
 
-        return GlobalVar(self, name, lvalue_ptr)
-
-
-class ValueStruct(AbstractStruct):
-    needs_temporary = False
+        return GlobalVar(self, name, lvalue)
 
 
 class Struct(AbstractStruct):

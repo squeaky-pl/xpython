@@ -47,7 +47,7 @@ class NamespaceCompiler(AbstractCompiler):
         arg = self.stack.pop()
 
         if isinstance(arg, struct_instance):
-            typ = self.types.get_type(arg.typ)
+            typ = self.types.get_type(arg.typ).value
             value = typ.store_name(self, instruction)
         else:
             value = arg
