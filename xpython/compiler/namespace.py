@@ -6,7 +6,7 @@ from xpython.compiler.function import FunctionCompiler
 from xpython.compiler.functions import default
 from xpython.nodes import Function, ConstKeyMap, Global, Class, Constant
 from xpython.typing import struct, struct_instance
-from xpython.cpy import PyObject, py_struct, PyObjectType, Py_TPFLAGS_DEFAULT
+from xpython.cpy import PyObject, PyModuleDef, py_struct, PyObjectType, Py_TPFLAGS_DEFAULT
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -20,6 +20,7 @@ class NamespaceCompiler(AbstractCompiler):
             ('struct', struct), ('void', 'void'),
             ('PyObject', PyObject), ('PyObjectType', PyObjectType),
             ('py_struct', py_struct),
+            ('PyModuleDef', PyModuleDef),
             ('Py_TPFLAGS_DEFAULT', default_const),
             ('default', default)])
 

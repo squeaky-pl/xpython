@@ -89,6 +89,32 @@ PyObjectType = struct(
 )
 
 
+PyModuleDef_Base = struct(
+    'PyModuleDef_Base',
+
+    ('ob_base', PyObject.value),
+
+    ('m_init', ...),
+    ('m_index', 'ssize'),
+    ('m_copy', ...)
+)
+
+
+PyModuleDef = struct(
+    'PyModuleDef',
+
+    ('m_base', PyModuleDef_Base.value),
+    ('m_name', 'cstr'),
+    ('m_doc', 'cstr'),
+    ('m_size', 'ssize'),
+    ('m_methods', ...),
+    ('m_slots', ...),
+    ('m_traverse', ...),
+    ('m_clear', ...),
+    ('m_free', ...)
+)
+
+
 class py_struct(struct):
     def __init__(self, name, *fields):
         super().__init__(name, ('ob_base', PyObject.value), *fields)

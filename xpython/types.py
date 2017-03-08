@@ -377,6 +377,7 @@ class Types:
         self.context = context
         self.ffi = ffi
         self.cache = {}
+        self.name_cache = {}
 
     @property
     def opaque(self):
@@ -446,6 +447,9 @@ class Types:
         if typ in self.cache:
             return self.cache[typ]
 
+        if issubclass(typ, Struct) and typ.__name__ in self.name_cache:
+            return self.name_cache[typ.__name__]
+
         instance = typ(self.context, self.ffi)
 
         if issubclass(typ, Struct):
@@ -453,6 +457,10 @@ class Types:
                 (self._get_type(t), n) for t, n in typ.fields]
 
         instance.build()
-        self.cache[typ] = instance
 
-        return self.cache[typ]
+        if issubclass(typ, Struct):
+            self.name_cache[typ.__name__] = instance
+        else:
+            self.cache[typ] = instance
+
+        return instance
