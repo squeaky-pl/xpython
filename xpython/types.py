@@ -171,54 +171,29 @@ class Field:
         self.cfield = cfield
 
 
-class ValueStruct(Type):
-    pass
-
-
-class Struct(Type):
-    needs_temporary = False
-
-    def build(self):
-        self.fields = OrderedDict(
-            (name, Field(name, typ, self.context.field(typ.ctype, name)))
-            for typ, name in self.fields)
-
-        value_ctype = self.context.struct_type(
-            self.name, list(f.cfield for f in self.fields.values()))
-        self.ctype = self.context.pointer_type(value_ctype)
-
-        self.value = ValueStruct(self.context, self.ffi)
-        self.value.ctype = value_ctype
-        self.value.cname = self.name
-
-        cffi_template = "typedef struct {\n"
-        for name, field in self.fields.items():
-            cffi_template += "    {} {};\n".format(field.typ.cname, name)
-        cffi_template += '} ' + self.name + ';'
-
-        self.ffi.cdef(cffi_template)
-
+class AbstractStruct(Type):
     def store_attr(self, compiler, instruction):
         where = compiler.stack.pop()
         what = compiler.stack.pop()
         cfield = self.fields[instruction.argval].cfield
         context = compiler.context
 
-        deref = compiler.context.dereference_field(
-            where.tojit(context), cfield)
+        accessed = self.access_field_lvalue(where.tojit(context), cfield)
 
-        compiler.block.add_assignment(deref, what.tojit(context))
+        compiler.block.add_assignment(accessed, what.tojit(context))
 
     def load_attribute(self, compiler, where, name):
-        cfield = self.fields[name].cfield
         context = compiler.context
 
-        deref = context.dereference_field(
-            where.tojit(context), cfield)
+        field = self.fields[name]
+        cfield = field.cfield
+        typ = field.typ
 
-        rvalue = Rvalue(self.fields[name].typ, '.' + name, deref)
+        accessed = self.access_field_lvalue(where.tojit(context), cfield)
 
-        if self.fields[name].typ.needs_temporary:
+        rvalue = Rvalue(typ, '.' + name, accessed)
+
+        if typ.needs_temporary:
             tmp = compiler.temporary(rvalue)
 
             compiler.block.add_assignment(
@@ -244,6 +219,39 @@ class Struct(Type):
         lvalue_ptr = context.address(lvalue, location)
 
         return GlobalVar(self, name, lvalue_ptr)
+
+
+class ValueStruct(AbstractStruct):
+    needs_temporary = False
+
+
+class Struct(AbstractStruct):
+    needs_temporary = False
+
+    def build(self):
+        self.fields = OrderedDict(
+            (name, Field(name, typ, self.context.field(typ.ctype, name)))
+            for typ, name in self.fields)
+
+        value_ctype = self.context.struct_type(
+            self.name, list(f.cfield for f in self.fields.values()))
+        self.ctype = self.context.pointer_type(value_ctype)
+        self.access_field = self.context.dereference_field
+        self.access_field_lvalue = self.access_field
+
+        self.value = ValueStruct(self.context, self.ffi)
+        self.value.fields = self.fields
+        self.value.ctype = value_ctype
+        self.value.cname = self.name
+        self.value.access_field = self.context.access_field
+        self.value.access_field_lvalue = self.context.access_field_lvalue
+
+        cffi_template = "typedef struct {\n"
+        for name, field in self.fields.items():
+            cffi_template += "    {} {};\n".format(field.typ.cname, name)
+        cffi_template += '} ' + self.name + ';'
+
+        self.ffi.cdef(cffi_template)
 
     @property
     def cname(self):
