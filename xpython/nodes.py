@@ -77,12 +77,12 @@ class Constant(Rvalue):
 
     @classmethod
     def frompy(cls, compiler, value):
-        if value is None:
-            return None
-        elif isinstance(value, Function):
+        if isinstance(value, Function):
             return value
         elif isinstance(value, types.CodeType):
             return value
+        elif value is None:
+            return cls(compiler.types.opaque, None)
         elif isinstance(value, (str, bytes)):
             return cls(type(value), value)
         elif isinstance(value, tuple):

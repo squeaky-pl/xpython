@@ -30,6 +30,11 @@ class Opaque(Type):
     def build(self):
         self.ctype = self.context.type("void*")
 
+    def jit_constant(self, context, value):
+        assert value is None
+
+        return context.null(self.ctype)
+
 
 class ByCopy:
     needs_temporary = True
@@ -351,6 +356,10 @@ class Types:
         self.context = context
         self.ffi = ffi
         self.cache = {}
+
+    @property
+    def opaque(self):
+        return self._get_type(Opaque)
 
     @property
     def buffer(self):
