@@ -154,6 +154,10 @@ class UInt(Integer):
     cname = 'unsigned int'
 
 
+class Int(Integer):
+    cname = 'int'
+
+
 class Unsigned(Integer):
     cname = 'unsigned long'
 
@@ -405,6 +409,10 @@ class Types:
         return self._get_type(UInt)
 
     @property
+    def int(self):
+        return self._get_type(Int)
+
+    @property
     def ssize(self):
         return self._get_type(SSize)
 
@@ -417,7 +425,7 @@ class Types:
             'void': Void,
             'opaque': Opaque,
             ...: Opaque,
-            'int': Default,
+            'int': Int,
             int: Default,
             'uint': UInt,
             'unsigned': Unsigned,

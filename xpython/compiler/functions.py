@@ -30,3 +30,18 @@ def PyModule_Create(compiler, arguments):
 
     return Rvalue(
         compiler.types.opaque, "PyModule_Create2()", PyModule_Create2_call)
+
+
+def PyType_Ready(compiler, arguments):
+    assert len(arguments) == 1
+    argument = arguments[0]
+
+    context = compiler.context
+
+    PyType_Ready = context.imported_function(
+        "int", "PyType_Ready", ["void*"])
+    PyType_Ready_call = context.call(
+        PyType_Ready, [context.address(argument.tojit(context))])
+
+    return Rvalue(
+        compiler.types.int, "PyType_Ready()", PyType_Ready_call)
