@@ -3,7 +3,8 @@ from collections import OrderedDict
 from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
-from xpython.compiler.functions import default, PyModule_Create, PyType_Ready
+from xpython.compiler.functions import default, PyModule_Create, PyType_Ready,\
+    PyModule_AddObject
 from xpython.nodes import Function, ConstKeyMap, Global, Class, Constant
 from xpython.typing import struct, struct_instance
 from xpython.cpy import PyObject, PyModuleDef, py_struct, PyObjectType, Py_TPFLAGS_DEFAULT
@@ -24,7 +25,8 @@ class NamespaceCompiler(AbstractCompiler):
             ('PyModuleDef', PyModuleDef),
             ('Py_TPFLAGS_DEFAULT', default_const),
             ('default', default), ('PyModule_Create', PyModule_Create),
-            ('PyType_Ready', PyType_Ready)])
+            ('PyType_Ready', PyType_Ready),
+            ('PyModule_AddObject', PyModule_AddObject)])
 
     def log(self):
         print(self.stack)

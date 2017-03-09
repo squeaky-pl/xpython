@@ -32,6 +32,25 @@ def PyModule_Create(compiler, arguments):
         compiler.types.opaque, "PyModule_Create2()", PyModule_Create2_call)
 
 
+def PyModule_AddObject(compiler, arguments):
+    assert len(arguments) == 3
+
+    context = compiler.context
+
+    PyModule_AddObject = context.imported_function(
+        "int", "PyModule_AddObject", ["void*", "const char*", "void*"])
+    PyModule_AddObject_call = context.call(
+        PyModule_AddObject,
+        [
+            arguments[0].tojit(context),
+            arguments[1].tojit(context),
+            context.address(arguments[2].tojit(context))
+        ])
+
+    return Rvalue(
+        compiler.types.int, "PyModule_AddObject()", PyModule_AddObject_call)
+
+
 def PyType_Ready(compiler, arguments):
     assert len(arguments) == 1
     argument = arguments[0]
