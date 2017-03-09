@@ -290,7 +290,11 @@ class FunctionCompiler(AbstractCompiler):
 
         if callable(function):
             result = function(self, arguments)
-            self.stack.append(Constant.frompy(self, None))
+
+            if result is None:
+                self.stack.append(Constant.frompy(self, None))
+            else:
+                self.stack.append(result)
 
             return
 

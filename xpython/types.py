@@ -31,6 +31,7 @@ class Void(Type):
 
 
 class Ptr(Type):
+    needs_temporary = True
     default = None
 
     def jit_constant(self, context, value):
