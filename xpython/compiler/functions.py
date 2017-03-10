@@ -1,5 +1,5 @@
 from xpython.types import ValueStruct
-from xpython.nodes import Rvalue
+from xpython.nodes import Rvalue, Constant
 
 
 def default(compiler, arguments):
@@ -14,6 +14,16 @@ def default(compiler, arguments):
         else:
             argument.typ.store_attribute(
                 compiler, argument, field.name, field.typ.default_constant())
+
+
+def sizeof(compiler, arguments):
+    assert len(arguments) == 1
+    argument = arguments[0]
+
+    be_type = compiler.types.get_type(argument).value
+
+    return Constant(
+        compiler.types.ssize, be_type.size())
 
 
 def PyModule_Create(compiler, arguments):

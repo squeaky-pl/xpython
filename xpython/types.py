@@ -22,6 +22,9 @@ class Type:
     def default_constant(self):
         return Constant(self, self.default)
 
+    def size(self):
+        return self._size
+
 
 class Void(Type):
     cname = 'void'
@@ -31,6 +34,7 @@ class Void(Type):
 
 
 class Ptr(Type):
+    _size = 8
     needs_temporary = True
     default = None
 
@@ -143,6 +147,7 @@ class Default(Integer):
 
 
 class SSize(Integer):
+    _size = 8
     cname = 'ssize_t'
 
 
@@ -253,6 +258,10 @@ class ValueStruct(AbstractStruct):
             self.ctype, name, location)
 
         return GlobalVar(self, name, lvalue)
+
+    def size(self):
+        ### CRITICAL FIXME: implement struct alignment and padding
+        return sum(f.typ.size() for f in self.fields.values())
 
 
 class Struct(Ptr, AbstractStruct):
