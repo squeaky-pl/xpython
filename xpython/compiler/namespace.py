@@ -4,10 +4,11 @@ from xpython import CompilerResult
 from xpython.compiler import AbstractCompiler
 from xpython.compiler.function import FunctionCompiler
 from xpython.compiler.functions import default, PyModule_Create, PyType_Ready,\
-    PyModule_AddObject, sizeof
+    PyModule_AddObject, sizeof, PyType_GenericNew
 from xpython.nodes import Function, ConstKeyMap, Global, Class, Constant
 from xpython.typing import struct, struct_instance
-from xpython.cpy import PyObject, PyModuleDef, py_struct, PyObjectType, Py_TPFLAGS_DEFAULT
+from xpython.cpy import PyObject, PyModuleDef, py_struct, \
+    PyObjectType, Py_TPFLAGS_DEFAULT
 
 
 class NamespaceCompiler(AbstractCompiler):
@@ -27,7 +28,8 @@ class NamespaceCompiler(AbstractCompiler):
             ('default', default), ('sizeof', sizeof),
             ('PyModule_Create', PyModule_Create),
             ('PyType_Ready', PyType_Ready),
-            ('PyModule_AddObject', PyModule_AddObject)])
+            ('PyModule_AddObject', PyModule_AddObject),
+            ('PyType_GenericNew', PyType_GenericNew)])
 
     def log(self):
         print(self.stack)

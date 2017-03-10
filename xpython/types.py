@@ -209,6 +209,9 @@ class AbstractStruct(Type):
 
         accessed = self.access_field_lvalue(where.tojit(context), cfield)
 
+        if callable(what):
+            what = what(compiler)
+
         compiler.block.add_assignment(accessed, what.tojit(context))
 
     def store_attr(self, compiler, instruction):

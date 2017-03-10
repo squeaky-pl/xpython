@@ -16,6 +16,17 @@ def default(compiler, arguments):
                 compiler, argument, field.name, field.typ.default_constant())
 
 
+def PyType_GenericNew(compiler):
+    context = compiler.context
+    dlsym = context.imported_function(
+        "void*", "dlsym", ["void*", "const char*"])
+    dlsym_call = context.call(
+        dlsym, [context.null("void*"), context.string_literal(b"PyType_GenericNew")])
+
+    return Rvalue(
+        compiler.types.opaque, 'PyType_GenericNew', dlsym_call)
+
+
 def sizeof(compiler, arguments):
     assert len(arguments) == 1
     argument = arguments[0]
